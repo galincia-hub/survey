@@ -70,12 +70,12 @@ SPEC 3 is the base; reference `questions.json` + live hardcoded strings (`script
 | `linkedScores[]` (text only, targets score) | linkedScores | — (sheet logic) | converter default: score questions of the same area |
 | `shortLabel` (score, for linked-score lines) | — | — | sheet labels "공연", "바/라운지" |
 | `identity: true` (question may collect name/company) | — | — | R04 "성함을 함께 남겨주시면" |
-| `privacy.allowIdentity` + `privacy.identityQuestions[]` | — | — | — |
+| `privacy.allowIdentity` + `privacy.identityQuestions[]` (+ opt-in `privacy.requiredIdentityQuestions[]`) | — | — | — |
 | `distribution.{deadlineText,sender,greeting,thanks,purpose,whyYou,usage,ask,ripple}` | distribution | — | `"응답 마감: …"` note |
 | `collector.{adapter,endpoint,…}` | — | — | `GOOGLE_FORM_ACTION/ENTRY` |
 | `payload.{format: legacy|standard, surveyType}` | — | — | `SURVEY_TYPE:"C"` |
 
-Semantic checks (validator, non-zero exit, deploy gate): unique section+question ids; reserved ids; `min < baseline <= max`, integers; question overrides valid; linkedScores exist and are `score`; links only on `text`; choice options non-empty/unique; ISO `eventDate`/`deadline` (offset required); `deadline > eventDate`; forbidden word (U+C775 U+BA85, the Korean word for "anonymous") anywhere in content **and** in generated Kakao/notice text; identity heuristic (성함/성명/이름/회사/소속/name/company) on prompts/help → error unless the question id is listed in `privacy.identityQuestions` (no blanket bypass); collector adapter allowed values and endpoint rules; `surveyId` equals folder name.
+Semantic checks (validator, non-zero exit, deploy gate): unique section+question ids; reserved ids; `min < baseline <= max`, integers; question overrides valid; linkedScores exist and are `score`; links only on `text`; choice options non-empty/unique; ISO `eventDate`/`deadline` (offset required); `deadline > eventDate`; forbidden word (U+C775 U+BA85, the Korean word for "anonymous") anywhere in content **and** in generated Kakao/notice text; identity heuristic (성함/성명/이름/회사/소속/name/company) on prompts/help → error unless the question id is listed in `privacy.identityQuestions` (no blanket bypass); listed identity questions must be `required:false` unless also in `privacy.requiredIdentityQuestions` (Owner opt-in); collector adapter allowed values and endpoint rules; `surveyId` equals folder name.
 
 ## 3. Response payload
 

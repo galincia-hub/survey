@@ -63,6 +63,7 @@ export function validate(content) {
   if (content.payload.format==='legacy' && !content.payload.surveyType) errors.push('Legacy payload needs surveyType');
   if (content.intro.emphasisParagraph!==undefined && content.intro.emphasisParagraph>=content.intro.paragraphs.length) errors.push('Invalid emphasis paragraph');
   for (const id of content.privacy.identityQuestions||[]) if (!qs.some(q=>q.id===id)) errors.push('Unknown identity question: '+id);
+  for (const id of content.privacy.requiredIdentityQuestions||[]) if (!content.privacy.identityQuestions?.includes(id)) errors.push(`requiredIdentityQuestions: ${id} must also be listed in identityQuestions`);
   for (const q of qs) {
     if (q.type==='score' && (!content.scale.enabled || !scaleOK({...content.scale,...q}))) errors.push(`${q.id}: invalid score scale`);
     for (const id of q.linkedScores||[]) if (!qs.some(t=>t.id===id && t.type==='score')) errors.push(`${q.id}: linked score missing or not score`);
@@ -71,6 +72,7 @@ export function validate(content) {
     const identityText=[q.id,q.prompt,q.help||''].join(' ');
     const matched=identityText.match(/성함|성명|이름|회사|소속|\b(name|company|employer|organization)\b/i)?.[0];
     if ((!content.privacy.allowIdentity || !content.privacy.identityQuestions?.includes(q.id)) && (q.identity || matched)) errors.push(`${q.id}: identity collection (${matched||"identity flag"}) needs explicit permission`);
+    if (content.privacy.identityQuestions?.includes(q.id) && q.required!==false && !content.privacy.requiredIdentityQuestions?.includes(q.id)) errors.push(`${q.id}: identity question must be required:false (privacy minimization); keeping it required needs Owner approval and an explicit privacy.requiredIdentityQuestions entry`);
   }
   return errors;
 }

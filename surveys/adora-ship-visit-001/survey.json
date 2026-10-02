@@ -7,6 +7,9 @@
     "allowIdentity": true,
     "identityQuestions": [
       "R04"
+    ],
+    "requiredIdentityQuestions": [
+      "R04"
     ]
   },
   "theme": "default",

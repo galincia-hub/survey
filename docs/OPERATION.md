@@ -45,13 +45,12 @@ Google Form은 서버측 자동 마감이 없다. 마감 시각(2026-10-06 23:59
 - `tools/report.mjs`: 시트 `raw / responses / summary / questions / text_linked / report_text` + `report.txt`.
 - 주관식은 같은 영역 점수와 한 줄로 묶여 나온다 (`공연 12 · 바/라운지 10 · 수영장 평가안함`, `shortLabel` 사용).
 
-## 5. Owner 결정 필요: Adora R04 (성함 기재) 문항
+## 5. Adora R04 (성함 기재) 문항 — Owner 결정 완료
 
 - 현황: Adora 마지막 문항 R04 ("…회신을 원하시는 경우 성함을 함께 남겨주시면 별도로 연락드려…")는 현행(live) 화면에서 **필수 입력**이고, 응답자가 이름을 적도록 유도한다.
-- 처리: 현행과의 동등성(parity)을 위해 그대로 유지했다. 검증기는 이름·회사 질문을 막지만, R04만 `privacy.identityQuestions: ["R04"]`로 명시 허용했다. 다른 문항에서 식별 정보를 묻는 순간 검증이 실패한다.
-- 문제: 필수라서 이름을 쓰고 싶지 않은 응답자도 무언가 적어야 제출할 수 있다. 개인정보 수집이 사실상 유도된다.
-- 선택지:
-  1. **필수 유지** — 현행과 동일. Adora는 마감이 10/6이므로 변경 위험 없음.
-  2. **선택(optional)로 변경** — `required: false`. 현행 대비 제출 조건이 달라지므로 payload/통계 영향 확인 필요.
-  3. **미래 설문에서는 삭제** — Adora는 유지하고 신규 설문 템플릿에는 성함 문항을 넣지 않는다 (intake는 기본적으로 식별 질문을 제외한다).
-- 회신 요청: 1 / 2 / 3 중 선택.
+- **Owner 결정 (2026-10-02 12:03 KST): 개인정보 최소화.**
+  - **Adora 옵션 A**: 현행(live)은 변경하지 않는다.
+  - factory의 Adora 사본은 현행과의 동등성(parity)을 위해 R04를 **필수 그대로 유지**한다. 이를 위해 `privacy.requiredIdentityQuestions: ["R04"]`를 명시했다 (그 외 내용 변경 없음. parity·golden payload·시각 diff 테스트 통과).
+  - **factory 기본값 = 식별(이름·회사) 질문은 선택(`required: false`)**. 검증기는 `privacy.identityQuestions`에 있는 문항이 `required: false`가 아니면, `privacy.requiredIdentityQuestions`에 그 id가 명시된 경우를 제외하고 오류로 처리한다. intake는 식별 질문을 메모가 명시 요청한 경우에만 `required: false`로 만들고, `requiredIdentityQuestions`는 절대 추가하지 않는다.
+- 필수로 유지하려면(opt-in): 해당 id를 `identityQuestions`와 `requiredIdentityQuestions` 양쪽에 넣는다 (`requiredIdentityQuestions`는 `identityQuestions`의 부분집합이어야 한다). **이 opt-in은 Owner 승인이 필요하다.** 승인 없이 추가하지 않는다.
+- 참고: 필수 이름 문항은 이름을 쓰고 싶지 않은 응답자에게도 무언가 적도록 강제하므로 개인정보 수집을 사실상 유도한다. 그래서 기본값을 선택으로 뒀다.

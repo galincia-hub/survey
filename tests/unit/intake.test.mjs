@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { parseMemo, parseDeadline, scaffold, buildIntakePrompt, INTAKE_RULES, ID_RE } from '../../lib/intake.mjs';
 import { intake } from '../../tools/intake.mjs';
+import { validate } from '../../tools/validate.mjs';
 import { containsForbidden, FORBIDDEN_WORD } from '../../lib/kakao.mjs';
 
 const here = (p) => new URL(p, import.meta.url).pathname;
@@ -75,6 +76,20 @@ test('explicit (식별허용) goes to per-question allowlist', () => {
   const { survey } = scaffold('행사: X\n질문:\n## A\n- 점수 문항\n- 담당자 성함을 적어주세요 (주관식)(식별허용)\n', { id: 'x-event-001' });
   const q = survey.sections[0].questions.find((x) => x.identity);
   assert.deepEqual(survey.privacy, { allowIdentity: true, identityQuestions: [q.id] });
+  assert.equal(q.required, false); assert.ok(!('requiredIdentityQuestions' in survey.privacy));
+});
+
+test('intake: memo explicitly requesting a name field yields an optional identity question that validates', () => {
+  const idMemo = fs.readFileSync(here('../fixtures/memos/identity-memo.txt'), 'utf8');
+  const { survey, todos } = scaffold(idMemo, { id: 'identity-workshop-001', today: '2026-10-02' });
+  const q = survey.sections.flatMap((s) => s.questions).find((x) => x.identity);
+  assert.ok(q && q.prompt.includes('성함'));
+  assert.equal(q.required, false);
+  assert.deepEqual(survey.privacy, { allowIdentity: true, identityQuestions: [q.id] });
+  assert.deepEqual(todos, []);
+  assert.deepEqual(validate(survey), []);
+  const strict = structuredClone(survey); strict.sections.flatMap((s) => s.questions).find((x) => x.id === q.id).required = true;
+  assert.ok(validate(strict).some((e) => e.startsWith(q.id)));
 });
 
 test('no 비교기준 -> neutral scale + TODO; missing fields become TODO markers, not invented facts', () => {

@@ -17,3 +17,6 @@ links*.csv
 *.xlsx
 reports/out/
 published/**/responses*
+
+# deployed collector config (account-specific)
+collector/wrangler.toml
