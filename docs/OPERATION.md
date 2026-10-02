@@ -107,5 +107,6 @@ node tools/build-report-site.mjs --out dist/report-site-private \
    - `node tools/build-report-site.mjs --out dist/report-site-private --collector https://survey-factory-collector.galincia-survey.workers.dev --survey-base https://galincia-hub.github.io/survey/s/surveys/ --default-survey adora-ship-visit-001 --surveys adora-ship-visit-001,sample-001 --embed-report-secret --baked /home/box/.local/share/survey-factory/baked`
    - `cd dist/report-site-private && vercel deploy --prod --yes`
    - 검증: 비로그인 `curl`이 `/`, `/reports/`, `report-config.json`, `report-secret.json`, `baked/adora-ship-visit-001.json` 모두 **302**인지(아니면 실패로 종료), `vercel curl /reports/baked/adora-ship-visit-001.json`의 `counts`(rows/excluded/included)와 `generatedAt`만 출력.
+   - `vercel curl`이 프로젝트에 automation-bypass 토큰을 만들기 때문에, 스크립트가 마지막에 그 토큰을 revoke하고 `bypass tokens left: 0`을 확인한다(값은 출력하지 않음).
    - `NO_DEPLOY=1`이면 빌드까지만 한다.
 3. 결과 보고: `sheet rows N, excluded 2, included M`과 live counts가 같은지 확인. 제외할 테스트 제출이 더 생기면 스크립트의 `--exclude-ts`에 추가한다. 마감(2026-10-06) 이후에는 루틴을 끈다.
