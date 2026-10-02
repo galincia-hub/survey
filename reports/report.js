@@ -4,12 +4,17 @@ import { buildCopyText } from '../lib/copytext.mjs';
 import { buildAiPrompt } from '../lib/prompt.mjs';
 import { linkedPrefix, fmt1, fmtDelta } from '../lib/format.mjs';
 import { parseGformCsv, parseJsonl } from '../lib/sources.mjs';
+import { parseReportConfig, surveyUrlFrom as urlFromId } from '../lib/report-config.mjs';
+import { renderDashboard } from '../lib/report-view.mjs';
+import { buildSheets } from '../lib/xlsx-rows.mjs';
+import { buildXlsx, XLSX_MIME } from '../lib/xlsx-writer.mjs';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 const SECRET_KEY = 'sf-report-secret'; // sessionStorage only (cleared with the tab)
 const params = new URLSearchParams(location.search);
 let S = null;
+let config = {}; // optional ./report-config.json (validated); never contains a secret
 
 const store = {
   get() { try { return sessionStorage.getItem(SECRET_KEY) ?? ''; } catch { return ''; } },
@@ -17,9 +22,20 @@ const store = {
 };
 const status = (msg, err = false) => { $('status').textContent = msg; $('status').className = err ? 'err' : 'muted'; };
 
-function surveyUrlFrom(v) {
-  v = v.trim();
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v) ? `../surveys/${v}/survey.json` : v;
+const surveyUrlFrom = (v) => urlFromId(v, config);
+
+// Optional same-origin config for hosted builds. 404 / network / parse errors are ignored (local preview is unchanged).
+async function loadConfig() {
+  try {
+    const res = await fetch('./report-config.json', { cache: 'no-store', credentials: 'omit' });
+    if (!res.ok) return;
+    config = parseReportConfig(await res.json());
+  } catch { return; }
+  // URL params and anything the user already typed win over the config
+  if (config.collector && !$('endpoint').value) $('endpoint').value = config.collector;
+  if (config.defaultSurvey && !$('survey-url').value) $('survey-url').value = config.defaultSurvey;
+  const list = $('survey-ids');
+  list.replaceChildren(...(config.surveys ?? []).map((id) => { const o = document.createElement('option'); o.value = id; return o; }));
 }
 
 async function loadRecords(survey) {
@@ -43,6 +59,7 @@ async function loadRecords(survey) {
 async function load() {
   try {
     status('불러오는 중…');
+    await configReady;
     const sres = await fetch(surveyUrlFrom($('survey-url').value));
     if (!sres.ok) throw new Error(`survey.json을 불러오지 못했습니다 (HTTP ${sres.status})`);
     const survey = await sres.json();
@@ -52,6 +69,7 @@ async function load() {
     S = { survey, all, records, duplicates, stats };
     render();
     status(`응답 ${all.length}건 불러옴 (집계 ${records.length}, 중복 ${duplicates.length})`);
+    $('inputs').open = false;
   } catch (e) {
     status(e.message, true);
   }
@@ -62,11 +80,14 @@ const cellVal = (v) => (v === undefined || v === null || v === '' ? '' : Array.i
 function render() {
   const { survey, all, records, duplicates, stats } = S;
   document.title = `${survey.title} · 설문 리포트`;
-  $('title').textContent = `${survey.title} · 설문 리포트`;
+  const theme = survey.theme && survey.theme !== 'default' ? survey.theme : '';
+  if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
   $('report').hidden = false;
   const qs = survey.sections.flatMap((s) => s.questions);
   const dupSet = new Set(duplicates);
   markLate(all, survey.deadline);
+  $('dashboard').innerHTML = renderDashboard({ survey, all, records, duplicates, stats });
+  document.querySelectorAll('.jump a[href^="#rp-"]').forEach((a) => { a.hidden = !document.querySelector(a.getAttribute('href')); });
   const lateAll = all.filter((r) => r.late).length, lateCounted = records.filter((r) => r.late).length;
 
   // A. responses
@@ -114,6 +135,19 @@ async function copy(mode) {
   $('copy-status').textContent = ok ? '복사되었습니다.' : '자동 복사가 막혀 있습니다. 아래 내용을 직접 선택해 복사해주세요.';
 }
 
+function downloadXlsx() {
+  if (!S) return;
+  try {
+    const bytes = buildXlsx(buildSheets(S.survey, S.all));
+    const url = URL.createObjectURL(new Blob([bytes], { type: XLSX_MIME }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `${S.survey.surveyId}-report.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    status('Excel 파일을 만들었습니다.');
+  } catch (e) { status(`Excel 생성 실패: ${e.message}`, true); }
+}
+
 function showTab(name) {
   document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   document.querySelectorAll('[data-view]').forEach((v) => { v.hidden = v.dataset.view !== name; });
@@ -125,12 +159,15 @@ $('source').addEventListener('change', () => {
 });
 $('load').addEventListener('click', load);
 document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+$('download-xlsx').addEventListener('click', downloadXlsx);
+document.querySelectorAll('.jump a').forEach((a) => a.addEventListener('click', () => { if (a.hash === '#data-details') $('data-details').open = true; }));
 $('copy-all').addEventListener('click', () => copy('all'));
 $('copy-scores').addEventListener('click', () => copy('scores'));
 $('copy-text').addEventListener('click', () => copy('text'));
 $('copy-prompt').addEventListener('click', () => copy('prompt'));
 
-// prefill from URL (never the secret)
+// prefill from URL (never the secret; the secret comes only from sessionStorage as before)
 if (params.get('survey')) $('survey-url').value = params.get('survey');
 if (params.get('collector')) $('endpoint').value = params.get('collector');
 $('secret').value = store.get();
+const configReady = loadConfig();

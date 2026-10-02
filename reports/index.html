@@ -5,15 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>설문 리포트</title>
+<link rel="stylesheet" href="../engine/themes.css">
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 <main>
 <h1 id="title">설문 리포트</h1>
 
-<section class="card" id="inputs">
+<details class="card" id="inputs" open>
+  <summary>불러오기 설정</summary>
   <label for="survey-url">survey.json 주소 (또는 surveyId)</label>
-  <input type="text" id="survey-url" autocomplete="off" placeholder="../surveys/&lt;id&gt;/survey.json">
+  <input type="text" id="survey-url" list="survey-ids" autocomplete="off" placeholder="../surveys/&lt;id&gt;/survey.json">
+  <datalist id="survey-ids"></datalist>
   <label for="source">응답 소스</label>
   <select id="source">
     <option value="collector">수집 서버 (collector)</option>
@@ -32,35 +35,44 @@
     <input type="file" id="file" accept=".jsonl,.json,.csv,.txt">
   </div>
   <p><button id="load" type="button">불러오기</button> <span id="status" class="muted" role="status"></span></p>
-</section>
+</details>
 
 <div id="report" hidden>
-  <div class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="a" aria-selected="true">A 응답</button>
-    <button type="button" role="tab" data-tab="b" aria-selected="false">B 요약</button>
-    <button type="button" role="tab" data-tab="c" aria-selected="false">C 문항별</button>
-    <button type="button" role="tab" data-tab="d" aria-selected="false">D 주관식</button>
-    <button type="button" role="tab" data-tab="e" aria-selected="false">E 복사</button>
-  </div>
-  <section class="card" data-view="a" id="view-a"></section>
-  <section class="card" data-view="b" id="view-b" hidden></section>
-  <section class="card" data-view="c" id="view-c" hidden></section>
-  <section class="card" data-view="d" id="view-d" hidden></section>
-  <section class="card" data-view="e" id="view-e" hidden>
-    <h2>보고서용 복사</h2>
-    <div class="row">
-      <button type="button" id="copy-all">전체 복사</button>
-      <button type="button" id="copy-scores">점수형만 복사</button>
-      <button type="button" id="copy-text">주관식만 복사</button>
-      <button type="button" id="copy-prompt" class="ghost">AI 프롬프트 복사</button>
+  <nav class="jump" aria-label="리포트 바로가기">
+    <a href="#rp-kpis">요약</a><a href="#rp-scores">점수</a><a href="#rp-choices">선택형</a><a href="#rp-groups">구분별</a><a href="#rp-comments">의견</a><a href="#data-details">데이터</a>
+    <button type="button" id="download-xlsx" class="ghost">Excel 다운로드 (.xlsx)</button>
+  </nav>
+  <div id="dashboard"></div>
+
+  <details class="card" id="data-details">
+    <summary>데이터 / 복사</summary>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="a" aria-selected="true">A 응답</button>
+      <button type="button" role="tab" data-tab="b" aria-selected="false">B 요약</button>
+      <button type="button" role="tab" data-tab="c" aria-selected="false">C 문항별</button>
+      <button type="button" role="tab" data-tab="d" aria-selected="false">D 주관식</button>
+      <button type="button" role="tab" data-tab="e" aria-selected="false">E 복사</button>
     </div>
-    <p id="copy-status" class="muted" role="status"></p>
-    <label for="copy-out">복사 내용</label>
-    <textarea id="copy-out" readonly></textarea>
-    <label for="ai-prompt">AI 보고서 프롬프트</label>
-    <textarea id="ai-prompt" readonly></textarea>
-    <p class="muted">.xlsx 파일은 <code>node tools/report.mjs &lt;survey.json&gt; --source jsonl|gform-csv &lt;file&gt; --out &lt;dir&gt;</code> 로 생성합니다.</p>
-  </section>
+    <section class="pane" data-view="a" id="view-a"></section>
+    <section class="pane" data-view="b" id="view-b" hidden></section>
+    <section class="pane" data-view="c" id="view-c" hidden></section>
+    <section class="pane" data-view="d" id="view-d" hidden></section>
+    <section class="pane" data-view="e" id="view-e" hidden>
+      <h2>보고서용 복사</h2>
+      <div class="row">
+        <button type="button" id="copy-all">전체 복사</button>
+        <button type="button" id="copy-scores">점수형만 복사</button>
+        <button type="button" id="copy-text">주관식만 복사</button>
+        <button type="button" id="copy-prompt" class="ghost">AI 프롬프트 복사</button>
+      </div>
+      <p id="copy-status" class="muted" role="status"></p>
+      <label for="copy-out">복사 내용</label>
+      <textarea id="copy-out" readonly></textarea>
+      <label for="ai-prompt">AI 보고서 프롬프트</label>
+      <textarea id="ai-prompt" readonly></textarea>
+      <p class="muted">.xlsx 파일은 위쪽 &quot;Excel 다운로드&quot; 버튼으로 받거나, <code>node tools/report.mjs &lt;survey.json&gt; --source jsonl|gform-csv &lt;file&gt; --out &lt;dir&gt;</code> 로 생성합니다.</p>
+    </section>
+  </details>
 </div>
 </main>
 <script type="module" src="./report.js"></script>

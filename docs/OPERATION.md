@@ -54,3 +54,19 @@ Google Form은 서버측 자동 마감이 없다. 마감 시각(2026-10-06 23:59
   - **factory 기본값 = 식별(이름·회사) 질문은 선택(`required: false`)**. 검증기는 `privacy.identityQuestions`에 있는 문항이 `required: false`가 아니면, `privacy.requiredIdentityQuestions`에 그 id가 명시된 경우를 제외하고 오류로 처리한다. intake는 식별 질문을 메모가 명시 요청한 경우에만 `required: false`로 만들고, `requiredIdentityQuestions`는 절대 추가하지 않는다.
 - 필수로 유지하려면(opt-in): 해당 id를 `identityQuestions`와 `requiredIdentityQuestions` 양쪽에 넣는다 (`requiredIdentityQuestions`는 `identityQuestions`의 부분집합이어야 한다). **이 opt-in은 Owner 승인이 필요하다.** 승인 없이 추가하지 않는다.
 - 참고: 필수 이름 문항은 이름을 쓰고 싶지 않은 응답자에게도 무언가 적도록 강제하므로 개인정보 수집을 사실상 유도한다. 그래서 기본값을 선택으로 뒀다.
+
+## 6. 호스팅 리포트(비공개)
+
+웹 리포트(`reports/`)를 정적 번들로 만들어 비공개 호스트(Vercel)에 올릴 수 있다. 번들에는 코드와 설정(`report-config.json`)만 들어가며 응답·설문 콘텐츠·`.env`·`wrangler.toml`은 들어가지 않는다.
+
+```
+node tools/build-report-site.mjs --out dist/report-site \
+  --collector https://<worker-host> \
+  --survey-base https://<pages-host>/<path>/surveys/ \
+  [--default-survey <id>] [--surveys <id>,<id>]
+```
+
+- 출력: `reports/{index.html,report.js,styles.css,report-config.json}`, `engine/themes.css`, `lib/*.mjs`(리포트가 쓰는 모듈만), `vercel.json`(`/` → `/reports/`, CSP·`no-store`·`frame-ancestors 'none'` 등 헤더). `--out`은 `dist/` 아래만 허용한다.
+- 리포트 비밀번호(`REPORT_SECRET`)는 **화면에서 직접 입력**한다. 설정 파일·URL·빌드 인자에 넣지 않으며 이 탭의 sessionStorage에만 남는다. 빌더는 비밀처럼 보이는 내용이 출력에 있으면 빌드를 실패시킨다.
+- **Vercel Deployment Protection(비밀번호/SSO 보호)을 반드시 켠다.** 번들 자체는 정적 파일이라 접근 제어는 호스트 보호에 의존한다. collector의 `ALLOWED_ORIGINS`에 리포트 배포 origin을 추가해야 응답을 읽을 수 있다.
+- 화면: 요약 KPI · 영역/문항별 점수 막대(기준선) · 선택형 분포 · 참여 구분별 비교 · 주관식(관련 점수 포함) · `Excel 다운로드`(브라우저에서 `tools/report.mjs`와 같은 6개 시트 생성). 기존 표/복사/AI 프롬프트는 "데이터 / 복사"에 있다.
