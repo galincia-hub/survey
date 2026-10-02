@@ -1,0 +1,14 @@
+{
+  "surveyId": "sample-001",
+  "version": "1.0",
+  "engineVersion": "0.1.0",
+  "files": {
+    "_headers": "f83a95b62960aae4d333fe68f8e2e5ed98d1be99cc3ac8df708dc1e8dfa83cdf",
+    "surveys/sample-001/assets/engine.3c0d74f7e04350c3.js": "3c0d74f7e04350c3a9051312c66f57c0078c4964195ba3df7a526a4de3d906d6",
+    "surveys/sample-001/assets/messages.90a4ec5d7ceeade4.js": "90a4ec5d7ceeade41034a7df36ea7c58957d298eef6cbb66011e064752fc4505",
+    "surveys/sample-001/assets/storage.5b948b522651604b.js": "5b948b522651604bbd1d8b0eb40e5db4d6343d1a0c21f19beb9ac41061fa5f91",
+    "surveys/sample-001/assets/styles.92f2c52f5a87aadc.css": "92f2c52f5a87aadc03615224cda986a4025f411027942098d1b66aa7118db6f0",
+    "surveys/sample-001/index.html": "0ce62499378aa74508871c6445a2740e3eb95d378c3e2f602edaa41299e440d2",
+    "surveys/sample-001/survey.json": "255273eea2dddd85a36143ce4b46b45106e3b157f12a3b0095b9725945b3b9a2"
+  }
+}

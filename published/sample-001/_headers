@@ -1,0 +1,4 @@
+/surveys/sample-001/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://survey-factory-collector.galincia-survey.workers.dev; form-action 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
