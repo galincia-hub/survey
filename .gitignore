@@ -22,3 +22,8 @@ published/**/responses*
 
 # deployed collector config (account-specific)
 collector/wrangler.toml
+
+# baked Google-Sheet responses for the private report bundle (personal data; never commit)
+baked/
+**/baked/
+*.baked.json

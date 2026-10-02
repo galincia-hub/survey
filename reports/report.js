@@ -37,6 +37,33 @@ async function loadConfig() {
   if (config.defaultSurvey && !$('survey-url').value) $('survey-url').value = config.defaultSurvey;
   const list = $('survey-ids');
   list.replaceChildren(...(config.surveys ?? []).map((id) => { const o = document.createElement('option'); o.value = id; return o; }));
+  // survey picker (hosted builds with several surveys and/or baked data)
+  const ids = config.surveys ?? [];
+  if (ids.length > 1 || (config.baked ?? []).length) {
+    const cur = $('survey-url').value.trim();
+    $('survey-pick').replaceChildren(...ids.map((id) => {
+      const o = document.createElement('option');
+      o.value = id; o.textContent = isBaked(id) ? `${id} (시트 응답)` : `${id} (수집 서버)`;
+      return o;
+    }));
+    if (!ids.includes(cur)) { // keep whatever was typed / passed in ?survey=; the picker just shows "직접 입력"
+      const o = document.createElement('option'); o.value = ''; o.textContent = cur ? '직접 입력한 설문' : '설문을 선택하세요';
+      $('survey-pick').prepend(o);
+    }
+    $('survey-pick').value = ids.includes(cur) ? cur : '';
+    $('picker-card').hidden = false;
+  }
+}
+
+const isBaked = (id) => (config.baked ?? []).includes(String(id ?? '').trim());
+
+/** Baked bundle data (./baked/<id>.json from tools/sync-gform-sheet.mjs): survey.json + gform-csv responses. */
+async function loadBaked(id) {
+  const res = await fetch(`./baked/${encodeURIComponent(id)}.json`, { cache: 'no-store', credentials: 'same-origin' });
+  if (!res.ok) throw new Error(`응답 데이터를 불러오지 못했습니다 (HTTP ${res.status})`);
+  const b = await res.json();
+  if (b?.kind !== 'sf-baked-gform' || b.surveyId !== id || !b.survey || typeof b.csv !== 'string') throw new Error('응답 데이터 형식이 올바르지 않습니다.');
+  return { survey: b.survey, all: parseGformCsv(b.csv, { surveyId: id }), meta: b };
 }
 
 // Optional same-origin report-secret.json from a build with --embed-report-secret. Absent / invalid -> the password is typed as before.
@@ -74,15 +101,21 @@ async function load() {
   try {
     status('불러오는 중…');
     await configReady;
-    const sres = await fetch(surveyUrlFrom($('survey-url').value));
-    if (!sres.ok) throw new Error(`survey.json을 불러오지 못했습니다 (HTTP ${sres.status})`);
-    const survey = await sres.json();
-    const all = await loadRecords(survey);
+    let survey, all, meta = null;
+    const id = $('survey-url').value.trim();
+    if (isBaked(id)) ({ survey, all, meta } = await loadBaked(id));
+    else {
+      const sres = await fetch(surveyUrlFrom($('survey-url').value));
+      if (!sres.ok) throw new Error(`survey.json을 불러오지 못했습니다 (HTTP ${sres.status})`);
+      survey = await sres.json();
+      all = await loadRecords(survey);
+    }
     const { records, duplicates } = dedupeLatest(all);
     const stats = computeStats(survey, records);
     S = { survey, all, records, duplicates, stats };
     render();
-    status(`응답 ${all.length}건 불러옴 (집계 ${records.length}, 중복 ${duplicates.length})`);
+    const asOf = meta ? ` · 시트 기준 ${new Date(meta.generatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} (테스트 등 제외 ${meta.counts?.excluded ?? 0}건)` : '';
+    status(`응답 ${all.length}건 불러옴 (집계 ${records.length}, 중복 ${duplicates.length})${asOf}`);
     $('inputs').open = false;
   } catch (e) {
     status(e.message, true);
@@ -186,4 +219,8 @@ if (params.get('collector')) $('endpoint').value = params.get('collector');
 $('secret').value = store.get();
 const configReady = Promise.all([loadConfig(), loadEmbeddedSecret()]);
 // With an embedded secret the report opens by itself (survey from ?survey= or the config's defaultSurvey)
-configReady.then(() => { if (embeddedSecret && $('source').value === 'collector' && $('survey-url').value.trim()) load(); });
+configReady.then(() => {
+  const id = $('survey-url').value.trim();
+  if (id && (isBaked(id) || (embeddedSecret && $('source').value === 'collector'))) load();
+});
+$('survey-pick').addEventListener('change', () => { if (!$('survey-pick').value) return; $('survey-url').value = $('survey-pick').value; load(); });

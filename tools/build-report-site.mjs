@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // Static bundle of the web report for a private host (e.g. Vercel).
-//   node tools/build-report-site.mjs --out <dir> --collector <origin> --survey-base <url> [--default-survey <id>] [--surveys a,b] [--embed-report-secret [env-file]]
+//   node tools/build-report-site.mjs --out <dir> --collector <origin> --survey-base <url> [--default-survey <id>] [--surveys a,b] [--embed-report-secret [env-file]] [--baked <dir>]
 // Writes only: reports/{index.html,report.js,styles.css,report-config.json}, engine/themes.css, lib/<modules report.js needs>, vercel.json.
 // No secrets, responses, survey content, .env or wrangler.toml ever go into the bundle.
 // Single exception, opt-in: --embed-report-secret writes REPORT_SECRET (never ADMIN_SECRET) to reports/report-secret.json, for a host that is
 // itself access-protected (Vercel Authentication). Only allowed when the out dir is git-ignored or outside the repo; the value is never printed.
+// Second opt-in exception: --baked <dir> copies <dir>/<surveyId>.json files written by tools/sync-gform-sheet.mjs (survey + gform-csv
+// responses) to reports/baked/<surveyId>.json, for surveys whose responses live in a Google Sheet. Same rules: access-protected host only,
+// out dir git-ignored or outside the repo. The baked files are still scanned for secret-like content.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -14,8 +17,10 @@ import { httpsOrigin, httpsBase, ID_RE } from '../lib/report-config.mjs';
 const REPO = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 const ASSETS = ['reports/index.html', 'reports/report.js', 'reports/styles.css', 'engine/themes.css'];
 const SECRET_FILE = 'reports/report-secret.json';
+const BAKED_DIR = 'reports/baked';
+const BAKED_KIND = 'sf-baked-gform';
 const DEFAULT_SECRETS_ENV = '/home/box/.config/survey-factory/collector-secrets.env';
-const OPTS = { '--out': 'out', '--collector': 'collector', '--survey-base': 'surveyBase', '--default-survey': 'defaultSurvey', '--surveys': 'surveys' };
+const OPTS = { '--out': 'out', '--collector': 'collector', '--survey-base': 'surveyBase', '--default-survey': 'defaultSurvey', '--surveys': 'surveys', '--baked': 'baked' };
 
 export class BuildError extends Error {}
 const fail = (m) => { throw new BuildError(m); };
@@ -77,7 +82,7 @@ export function checkOutDir(out, repo = REPO) {
   if (inside(real, repoReal) && real === path.join(repoReal, 'dist')) fail('refusing to write: use a subdirectory of dist/, not dist/ itself');
   if (fs.existsSync(real)) {
     if (!fs.statSync(real).isDirectory()) fail('--out exists and is not a directory');
-    if (fs.readdirSync(real).length && !fs.existsSync(path.join(real, 'vercel.json'))) fail('--out is not empty and is not a previous report-site build');
+    if (fs.readdirSync(real).filter((n) => n !== '.vercel').length && !fs.existsSync(path.join(real, 'vercel.json'))) fail('--out is not empty and is not a previous report-site build');
   }
   return real;
 }
@@ -107,6 +112,30 @@ export function checkSecretOutDir(out, repo = REPO) {
   const r = spawnSync('git', ['-C', repoReal, 'check-ignore', '-q', '--', path.join(out, SECRET_FILE)], { stdio: 'ignore' });
   const probe = spawnSync('git', ['-C', repoReal, 'check-ignore', '-q', '--', path.join(out, '.sf-ignore-probe')], { stdio: 'ignore' });
   if (r.status !== 0 || probe.status !== 0) fail('refusing to embed the report secret: --out is inside the repository but not git-ignored');
+}
+
+/** Baked response files (<dir>/<surveyId>.json from tools/sync-gform-sheet.mjs). Returns [{ id, text }]; never prints content. */
+export function readBaked(dir) {
+  let names;
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch { fail(`cannot read the --baked directory: ${dir}`); }
+  if (!names.length) fail('--baked directory has no <surveyId>.json files');
+  return names.map((n) => {
+    const id = n.slice(0, -5);
+    if (!ID_RE.test(id)) fail(`--baked file name is not a survey id: ${n}`);
+    const text = fs.readFileSync(path.join(dir, n), 'utf8');
+    let b;
+    try { b = JSON.parse(text); } catch { fail(`--baked file is not valid JSON: ${n}`); }
+    if (b?.kind !== BAKED_KIND || b.surveyId !== id || b.survey?.surveyId !== id || typeof b.csv !== 'string' || !Array.isArray(b.survey?.sections)) fail(`--baked file is not a ${BAKED_KIND} file for ${id}: ${n}`);
+    return { id, text };
+  });
+}
+
+/** Baked responses are personal data: same placement rule as the secret (git-ignored inside the repo, or outside it). */
+export function checkBakedOutDir(out, repo = REPO) {
+  const repoReal = fs.realpathSync(repo);
+  if (!(out === repoReal || out.startsWith(repoReal + path.sep))) return;
+  const r = spawnSync('git', ['-C', repoReal, 'check-ignore', '-q', '--', path.join(out, BAKED_DIR, 'probe.json')], { stdio: 'ignore' });
+  if (r.status !== 0) fail('refusing to bake responses: --out is inside the repository but not git-ignored');
 }
 
 /** Static ES-module imports of a file ("import x from './a.mjs'", "import './a.mjs'", "export * from './a.mjs'"). */
@@ -168,7 +197,7 @@ const FORBIDDEN_NAME = /(^|\/)(\.env[^/]*|wrangler\.toml|\.dev\.vars|survey\.jso
 /** `secret` ({ file, value, admin[] }, optional) lets exactly one expected file hold the report secret: it must be {"reportSecret": <value>} and nothing else, and no other file may contain it. */
 export function scanOutput(root, expected, secret) {
   const files = [];
-  (function walk(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); e.isDirectory() ? walk(p) : files.push(path.relative(root, p).split(path.sep).join('/')); } })(root);
+  (function walk(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (d === root && e.isDirectory() && e.name === '.vercel') continue; /* Vercel CLI link (project.json), never uploaded */ e.isDirectory() ? walk(p) : files.push(path.relative(root, p).split(path.sep).join('/')); } })(root);
   files.sort();
   const want = [...expected].sort();
   const extra = files.filter((f) => !want.includes(f)), missing = want.filter((f) => !files.includes(f));
@@ -205,6 +234,14 @@ export function build(argv, { repo = REPO } = {}) {
     checkSecretOutDir(out, repo);
     expected.push(SECRET_FILE);
   }
+  let baked = [];
+  if (o.baked !== undefined) {
+    baked = readBaked(o.baked);
+    checkBakedOutDir(out, repo);
+    cfg.baked = baked.map((b) => b.id);
+    cfg.surveys = [...new Set([...(cfg.surveys ?? []), ...cfg.baked])];
+    expected.push(...baked.map((b) => `${BAKED_DIR}/${b.id}.json`));
+  }
 
   fs.mkdirSync(out, { recursive: true });
   for (const d of ['reports', 'engine', 'lib']) fs.rmSync(path.join(out, d), { recursive: true, force: true }); // previous build only (vercel.json marker checked above)
@@ -215,6 +252,8 @@ export function build(argv, { repo = REPO } = {}) {
   fs.writeFileSync(path.join(out, 'reports/report-config.json'), JSON.stringify(cfg, null, 2) + '\n');
   fs.writeFileSync(path.join(out, 'vercel.json'), JSON.stringify(buildVercelJson(cfg), null, 2) + '\n');
   if (embed) fs.writeFileSync(path.join(out, SECRET_FILE), JSON.stringify({ reportSecret: embed.secret }) + '\n', { mode: 0o600 });
+  if (baked.length) fs.mkdirSync(path.join(out, BAKED_DIR), { recursive: true });
+  for (const b of baked) fs.writeFileSync(path.join(out, BAKED_DIR, `${b.id}.json`), b.text, { mode: 0o600 });
   try {
     const files = scanOutput(out, expected, embed && { file: SECRET_FILE, value: embed.secret, admin: embed.admin });
     return { out, files, config: cfg, ...(embed && { embeddedSecretChars: embed.secret.length }) };
@@ -232,7 +271,7 @@ if (process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1
     if (r.embeddedSecretChars) console.log(`embedded REPORT_SECRET (${r.embeddedSecretChars} chars) in ${SECRET_FILE}: upload this bundle only to the access-protected host`);
   } catch (e) {
     if (!(e instanceof BuildError)) throw e;
-    console.error(`error: ${e.message}\nusage: node tools/build-report-site.mjs --out <dir> --collector <https origin> --survey-base <https url ending with /> [--default-survey <id>] [--surveys a,b] [--embed-report-secret [env-file]]`);
+    console.error(`error: ${e.message}\nusage: node tools/build-report-site.mjs --out <dir> --collector <https origin> --survey-base <https url ending with /> [--default-survey <id>] [--surveys a,b] [--embed-report-secret [env-file]] [--baked <dir>]`);
     process.exit(2);
   }
 }

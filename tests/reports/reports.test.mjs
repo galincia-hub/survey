@@ -12,6 +12,7 @@ import { buildCopyText } from '../../lib/copytext.mjs';
 import { buildAiPrompt } from '../../lib/prompt.mjs';
 import { linkedPrefix, fmt1 } from '../../lib/format.mjs';
 import { connect, getJSON, delay } from '../helpers/cdp.mjs';
+import { buildBaked } from '../../tools/sync-gform-sheet.mjs';
 
 const root = new URL('../../', import.meta.url).pathname;
 const MOCK = 18806, STATIC = 18807, CDP = 18808;
@@ -281,6 +282,26 @@ test('reports page without report-secret.json: password stays visible, no auto-l
   assert.equal(await ev(`sessionStorage.getItem('sf-report-secret')`), REPORT);
   assert.deepEqual(errors, []);
   assert.deepEqual(blocked, []);
+  overlay = {};
+});
+
+test('reports page + baked sheet data: picker shows both surveys, baked survey loads without any password or collector, test rows excluded', async () => {
+  const rows = payloads.map((p, i) => ({ ts: `2026-10-02 1${i}:00:00`, payload: p }));
+  const baked = buildBaked({ survey, rows: [{ ts: '2026-10-01 17:43:52', payload: payloads[0] }, ...rows], exclude: ['2026-10-01 17:43'], now: new Date('2026-10-02T06:00:00Z') });
+  assert.equal(baked.counts.excluded, 1);
+  await openHosted({ [CONFIG_PATH]: { ...HOSTED_CONFIG, baked: [survey.surveyId] }, [`/reports/baked/${survey.surveyId}.json`]: baked }, '&collector=');
+  await waitFor(`!document.getElementById('report').hidden`, 'baked auto-load');
+  assert.match(await ev(`document.getElementById('status').textContent`), new RegExp(`^응답 ${all.length}건 불러옴 \\(집계 ${records.length}, 중복 ${duplicates.length}\\) · 시트 기준 .*제외 1건`));
+  assert.equal(await ev(`document.getElementById('sum-n').textContent`), String(stats.n));
+  assert.deepEqual(surveyReqs, []); // survey.json comes from the baked file
+  assert.equal(await ev(`document.getElementById('picker-card').hidden`), false);
+  assert.deepEqual(await ev(`[...document.getElementById('survey-pick').options].map((o) => o.value)`), [survey.surveyId, 'other-002']);
+  // picking the collector survey goes back to the hosted survey.json + collector path
+  await ev(`const s=document.getElementById('survey-pick'); s.value='other-002'; s.dispatchEvent(new Event('change')); true`);
+  await waitFor(`document.getElementById('status').textContent !== '' && !document.getElementById('status').textContent.startsWith('불러오는')`, 'collector survey');
+  assert.equal(await ev(`document.getElementById('survey-url').value`), 'other-002');
+  assert.deepEqual(surveyReqs, ['https://surveys.example/s/surveys/other-002/survey.json']);
+  assert.deepEqual(errors, []);
   overlay = {};
 });
 

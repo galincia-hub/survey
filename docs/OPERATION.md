@@ -88,3 +88,24 @@ node tools/build-report-site.mjs --out dist/report-site-private \
 - 보호는 **Vercel Authentication(ALL deployments)** 에 전적으로 의존한다. 로그인하지 않은 사람은 `report-secret.json`을 받을 수 없어야 한다. 보호가 꺼진 배포에 올리면 비밀번호가 그대로 공개된다.
 - Worker(collector)는 여전히 `REPORT_SECRET`을 요구한다. 파일이 있으면 리포트 페이지가 비밀번호 칸을 숨기고 그 값으로 요청하며(sessionStorage에는 저장하지 않음) 기본 설문(`--default-survey` 또는 `?survey=`)을 열자마자 불러온다. 설문을 바꾸고 `불러오기`를 누르면 다시 불러온다. 파일이 없으면 기존처럼 비밀번호를 직접 입력한다.
 - 비밀번호를 바꾸면(Worker 교체) 다시 빌드·업로드한다.
+
+### Google Sheet 응답을 비공개 리포트에 넣기 (`--baked`, 예: Adora `adora-ship-visit-001`)
+
+응답이 Worker가 아니라 **Google Form → Google Sheet**에 쌓이는 설문(Adora 라이브 설문)은 시트를 읽어 Vercel 번들에만 넣는다. 공개 저장소·GitHub Pages·설문 페이지(galincia-hub/MD)는 건드리지 않는다.
+
+- `tools/sync-gform-sheet.mjs`: 시트 xlsx(또는 Drive 커넥터 `download_file_content` 결과 JSON)의 원본 탭(`타임스탬프`,`payload`)을 읽어 `survey.json + gform-csv`를 담은 `<surveyId>.json`을 만든다. `--exclude-ts "YYYY-MM-DD HH:MM"`로 테스트 제출을 시트 타임스탬프(시트 현지 시각, KST) 기준으로 뺀다. 지정한 제외 값이 한 행도 맞지 않으면 실패한다(시트·폼은 수정하지 않는다). 출력은 개수만 표시한다.
+- `build-report-site.mjs --baked <dir>`: `<dir>/<id>.json`을 `reports/baked/<id>.json`으로 복사하고 `report-config.json`에 `baked`(id 목록)와 `surveys`를 추가한다. `--out`이 저장소 안이면 git-ignored(`dist/`)여야 한다. 비밀 스캐너는 baked 파일도 검사한다.
+- 리포트 화면: 맨 위 **설문 선택**. baked 설문은 `./baked/<id>.json`만 읽어(비밀번호·collector 불필요) 바로 열리고, 나머지(sample-001)는 기존처럼 Worker에서 읽는다(embedded secret). 상태줄에 시트 기준 시각과 제외 건수가 표시된다.
+- 데이터 위치(저장소 밖, 커밋 금지): `/home/box/.local/share/survey-factory/inbox/`(Drive 다운로드), `/home/box/.local/share/survey-factory/baked/`(baked JSON). `.gitignore`에 `baked/`, `*.baked.json`도 추가했다.
+- 보호는 Vercel Authentication(ALL)에 의존한다. 보호가 꺼진 곳에 올리면 응답(주관식 포함)이 공개된다.
+
+#### Adora 갱신 절차 (하루 2회, 에이전트 루틴)
+
+1. Google Drive 커넥터(`user-Google-drive`)로 `download_file_content` 호출: `fileId=1UpOY-izP4aa-ezuK1-ZfQcHPeT4e0p-N_HR21uMhyo8`(ADORA_MD_방선투어_폼응답), `exportMimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`. 결과(큰 출력은 `agent-tools/<id>.txt`로 저장됨)를 `/home/box/.local/share/survey-factory/inbox/adora-ship-visit-001.download.json`으로 옮긴다(`mv`). 내용을 화면에 출력하지 않는다.
+2. `/home/box/.local/share/survey-factory/refresh-adora.sh` 실행. 내부 순서:
+   - `node tools/sync-gform-sheet.mjs --survey adora-ship-visit-001 --in <inbox json> --tab '설문지 응답 시트1' --exclude-ts '2026-10-01 17:43' --exclude-ts '2026-10-01 18:19' --out /home/box/.local/share/survey-factory/baked/adora-ship-visit-001.json`
+   - `node tools/build-report-site.mjs --out dist/report-site-private --collector https://survey-factory-collector.galincia-survey.workers.dev --survey-base https://galincia-hub.github.io/survey/s/surveys/ --default-survey adora-ship-visit-001 --surveys adora-ship-visit-001,sample-001 --embed-report-secret --baked /home/box/.local/share/survey-factory/baked`
+   - `cd dist/report-site-private && vercel deploy --prod --yes`
+   - 검증: 비로그인 `curl`이 `/`, `/reports/`, `report-config.json`, `report-secret.json`, `baked/adora-ship-visit-001.json` 모두 **302**인지(아니면 실패로 종료), `vercel curl /reports/baked/adora-ship-visit-001.json`의 `counts`(rows/excluded/included)와 `generatedAt`만 출력.
+   - `NO_DEPLOY=1`이면 빌드까지만 한다.
+3. 결과 보고: `sheet rows N, excluded 2, included M`과 live counts가 같은지 확인. 제외할 테스트 제출이 더 생기면 스크립트의 `--exclude-ts`에 추가한다. 마감(2026-10-06) 이후에는 루틴을 끈다.
