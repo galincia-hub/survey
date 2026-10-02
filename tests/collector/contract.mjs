@@ -40,12 +40,12 @@ export function contractSuite(label, getBase) {
   });
 
   test(`[${label}] X-Submission-Id is idempotent`, async () => {
-    const a = await (await post('open-1', '{"a":1}', { 'X-Submission-Id': 'sub-1' })).json();
-    const b = await post('open-1', '{"a":1}', { 'X-Submission-Id': 'sub-1' });
+    const a = await (await post('open-1', '{"answers":{"a":1}}', { 'X-Submission-Id': 'sub-1' })).json();
+    const b = await post('open-1', '{"answers":{"a":1}}', { 'X-Submission-Id': 'sub-1' });
     assert.equal(b.status, 201);
     const bj = await b.json();
     assert.equal(bj.id, a.id); assert.equal(bj.duplicate, true);
-    const n = (await (await list('open-1', SECRETS.report)).json()).responses.filter((x) => x.raw === '{"a":1}' && x.id === a.id).length;
+    const n = (await (await list('open-1', SECRETS.report)).json()).responses.filter((x) => x.raw === '{"answers":{"a":1}}' && x.id === a.id).length;
     assert.equal(n, 1);
   });
 
@@ -54,11 +54,18 @@ export function contractSuite(label, getBase) {
     assert.equal((await fetch(url('/v1/status/no-such'))).status, 404);
     assert.equal((await post('open-1', '{not json')).status, 400);
     assert.equal((await post('open-1', '[1,2]')).status, 400);
+    // minimal shape gate: `answers` must be an object (legacy and standard payloads both have it)
+    for (const bad of ['{}', '{"a":1}', '{"answers":null}', '{"answers":[1]}', '{"answers":"x"}', '{"answers":3}']) {
+      const r = await post('open-1', bad);
+      assert.equal(r.status, 400, bad); assert.equal((await r.json()).error, 'invalid_payload');
+    }
+    const stored = (await (await list('open-1', SECRETS.report)).json()).responses.map((x) => x.raw);
+    assert.ok(!stored.includes('{}') && !stored.includes('{"a":1}'), 'rejected payloads are not stored');
     assert.equal((await post('open-1', '')).status, 400);
     const r = await post('open-1', JSON.stringify({ pad: 'x'.repeat(70 * 1024) }));
     assert.equal(r.status, 413);
     assert.equal((await r.json()).error, 'too_large');
-    assert.equal((await post('open-1', JSON.stringify({ pad: 'x'.repeat(60 * 1024) }))).status, 201);
+    assert.equal((await post('open-1', JSON.stringify({ answers: { pad: 'x'.repeat(60 * 1024) } }))).status, 201);
   });
 
   test(`[${label}] closed: past deadline and status=closed -> 410`, async () => {
@@ -69,7 +76,7 @@ export function contractSuite(label, getBase) {
     await put('manual-1', { version: '1', deadline: null, status: 'closed' });
     assert.equal((await post('manual-1', '{}')).status, 410);
     await put('manual-1', { version: '1', deadline: null, status: 'open' });
-    assert.equal((await post('manual-1', '{}')).status, 201);
+    assert.equal((await post('manual-1', '{"answers":{}}')).status, 201);
   });
 
   test(`[${label}] responses: 401 without / wrong secret (admin secret not accepted)`, async () => {

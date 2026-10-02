@@ -49,11 +49,13 @@ export async function buildSurvey(id,{root=projectRoot,target='github-pages',bas
   const source=name=>readFile(path.join(projectRoot,'engine',name),'utf8');
   const storage=await source('storage.js'),messages=await source('messages.js');
   const storageName=`storage.${hash(storage).slice(0,16)}.js`,messagesName=`messages.${hash(messages).slice(0,16)}.js`;
-  const engine=(await source('survey.js')).replace("'./storage.js'",`'./${storageName}'`).replace("'./messages.js'",`'./${messagesName}'`);
+  const rewrite=(code,from,to)=>{if(!code.includes(`'${from}'`))throw new Error(`Engine import specifier '${from}' not found in survey.js; update the bundle rewrite`);return code.replace(`'${from}'`,`'${to}'`);};
+  const engine=rewrite(rewrite(await source('survey.js'),'./storage.js',`./${storageName}`),'./messages.js',`./${messagesName}`);
   const engineName=`engine.${hash(engine).slice(0,16)}.js`;
   const styles=(await source('themes.css'))+'\n'+await source('styles.css'),styleName=`styles.${hash(styles).slice(0,16)}.css`;
   const policy=csp(content);
   const html=(await source('index.html')).replace(/\s*<link rel="stylesheet" href="\.\.\/\.\.\/engine\/themes.css">/,'').replace('../../engine/styles.css',`./assets/${styleName}`).replace('../../engine/survey.js',`./assets/${engineName}`).replace('<meta charset="utf-8">',`<meta charset="utf-8">\n  <meta http-equiv="Content-Security-Policy" content="${policy}">`);
+  for(const needle of [`./assets/${styleName}`,`./assets/${engineName}`,'Content-Security-Policy'])if(!html.includes(needle))throw new Error(`Bundle HTML rewrite failed: ${needle} missing; update tools/deploy.mjs`);
   const prefix=`surveys/${id}/`;
   const output={
     [prefix+'index.html']:html,[prefix+'survey.json']:JSON.stringify(content,null,2)+'\n',

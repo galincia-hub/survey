@@ -38,7 +38,8 @@ test('close rule: exact timestamp, shared with client', () => {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-wrangler-'));
 const cfg = path.join(tmp, 'wrangler.toml');
 const state = path.join(tmp, 'state');
-const env = { ...process.env, XDG_CONFIG_WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' };
+// Hermetic wrangler: telemetry off, config and logs in the temp dir (never the user's real wrangler config).
+const env = { ...process.env, XDG_CONFIG_HOME: tmp, WRANGLER_LOG_PATH: path.join(tmp, 'logs'), WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' };
 let child, log = '', workerUp = false, skipReason = null;
 
 async function waitPort(port, ms) {

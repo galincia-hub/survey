@@ -1,6 +1,6 @@
 # DEPLOYMENT — 배포 어댑터와 dry-run
 
-Status: Draft (Sonnet 5.5, Opus 최종 검토 전) · 승인 범위는 `DEPLOY_APPROVAL.md`, 응답 저장소 선택은 `COLLECTOR_DECISION.md`.
+Status: Final (Opus 5.5 최종 검토 반영, 2026-10-02) · 승인 범위는 `DEPLOY_APPROVAL.md`, 응답 저장소 선택은 `COLLECTOR_DECISION.md`.
 
 ## 1. 원칙
 
@@ -44,6 +44,14 @@ node tools/deploy.mjs <surveyId> --target github-pages|cloudflare --base-url htt
 | `local-mock` | 로컬 미리보기/테스트 | **배포 거부** (`--confirm`에서 차단) |
 | `worker` | 신규 설문 기본 | HTTPS 필수, 서버측 마감 410, `X-Submission-Id` 멱등 |
 | `google-form` | Adora | `endpoint`는 `https://docs.google.com/forms/d/e/<id>/formResponse`, `entry`(`entry.<digits>`), `allowedHosts` 필수. 현재 페이지 호스트가 `allowedHosts`에 있고 HTTPS일 때만 전송 (localhost/loopback/`*.pages.dev`/`*.vercel.app`는 항상 거부) |
+
+### 호스트·CORS 규칙 (worker collector)
+- 엔진은 `https:` 페이지에서만 외부 collector로 전송한다. loopback, 미리보기 배포(`<hash/branch>.<project>.pages.dev`, 모든 `*.vercel.app`)에서는 loopback collector로만 보낸다.
+- 운영용 `<project>.pages.dev`(라벨 하나)는 허용된다. 커스텀 도메인·`*.github.io`도 허용.
+- Worker의 `ALLOWED_ORIGINS`에는 설문 페이지 origin(예: `https://<project>.pages.dev`, `https://galincia-hub.github.io`)을 쉼표로 나열한다. 리포트 웹 페이지를 `tools/preview.mjs`로 열 때는 그 origin(예: `http://127.0.0.1:18790`)도 필요하다.
+- 리포트 웹 페이지(`tools/preview.mjs`)가 HTTPS Worker를 읽게 하려면 `COLLECTOR_ORIGIN=https://<worker-host> node tools/preview.mjs` — CSP `connect-src`에 그 origin 하나만 추가된다 (https origin 또는 loopback http만 허용, 경로·자격증명은 거부하고 시작 실패).
+- `google-form`: `redirect:'follow'`로 전송한다. 확인 필요 — 실제 Form이 리다이렉트로 답하는지, 그때 CSP(`connect-src docs.google.com`)가 후속 요청을 막지 않는지는 오프라인에서 검증하지 못했다 (Adora 팩토리 사본을 게시할 때만 해당).
+- Worker 제출 검증: 본문은 64KB 이하 JSON 객체이고 `answers`가 객체여야 한다 (아니면 400 `invalid_payload`). 원본 `raw`는 변경 없이 저장된다.
 
 ## 4. `--confirm`이 하는 일 (실제 게시)
 

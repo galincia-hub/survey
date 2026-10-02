@@ -1,14 +1,15 @@
 # COLLECTOR_DECISION — 응답 저장소 선택
 
-Status: Draft — Opus 5.5 final review pending
-Consistent with `docs/DESIGN.md` §4 (Worker + D1 default; Adora keeps `google-form`).
+Status: Final (Opus 5.5 최종 검토 반영, 2026-10-02) — Adora 경로(M3)는 Owner 결정 대기
+Consistent with `docs/DESIGN.md` §4 (Worker + D1 default) and `docs/DEPLOY_APPROVAL.md` §4.
 
 ## 결론
 
 | 대상 | 저장소 | 이유 |
 |---|---|---|
 | 팩토리 기본값 (신규 설문) | **공용 Cloudflare Worker + D1** | 실패가 보이고, 서버에서 마감이 걸리고, 설문 추가 시 백엔드 코드 수정이 없다. |
-| Adora (`adora-ship-visit-001`) | **`google-form` 어댑터 유지** | 이미 운영 중인 Form/Sheet와 데이터 연속성, 마감 10/6이라 이전할 시간이 없고 새 계정 승인이 필요 없다. 리포트는 Sheet CSV(`--source gform-csv`)로 읽는다. |
+| Adora (실제 설문) | **현행 유지: `galincia-hub/MD`의 기존 페이지 + 기존 Google Form** | 이미 공개·수집 중이고 마감이 10/6이라 이전할 이유가 없다. 리포트는 Sheet CSV(`--source gform-csv`)로 읽는다. |
+| Adora 팩토리 사본 (`adora-ship-visit-001`) | **동일성 검증용. collector `local-mock`, 게시하지 않음** | 질문·화면(0% 차이)·payload 동일함을 증명하는 용도. Owner가 팩토리 번들로 교체하기로 명시 결정할 때만 `google-form`(실제 Form 주소·`entry`·`allowedHosts`)을 콘텐츠에 넣는다 (`DEPLOY_APPROVAL.md` §4, 결정은 Owner). |
 | Owner 가 Cloudflare 를 승인하지 않을 때 | 공용 Google Form 1개 (payload 장문 필드 1개, surveyId 는 payload 안) | 수동 마감, 실패 비가시를 감수. 아래 표의 Google Form 열과 같다. |
 
 ## 비교

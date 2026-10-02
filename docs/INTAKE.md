@@ -1,6 +1,6 @@
 # INTAKE — 메모에서 survey.json 만들기
 
-Status: Draft — Opus 5.5 final review pending
+Status: Final (Opus 5.5 최종 검토 반영, 2026-10-02)
 
 SPEC 15: 사용자는 "행사 / 대상 / 목적 / 비교기준 / 질문·콘텐츠 / 마감일" 정도만 준다. 에이전트는 이를 `surveys/<id>/survey.json` 하나로 바꾼다. 엔진·HTML·JS·저장 코드는 건드리지 않는다.
 스키마: `schema/survey.schema.json`, 필드 설명: `docs/CONTENT_SCHEMA.md`.

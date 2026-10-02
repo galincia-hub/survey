@@ -1,6 +1,6 @@
 # OPERATION — 운영 가이드
 
-Status: Draft (Sonnet 5.5, Opus 최종 검토 전)
+Status: Final (Opus 5.5 최종 검토 반영, 2026-10-02) — §5 R04는 Owner 결정 대기
 
 ## 1. 새 설문 최단 경로
 
@@ -17,7 +17,8 @@ Status: Draft (Sonnet 5.5, Opus 최종 검토 전)
 
 ## 2. 일상 운영
 
-- 응답 확인: `reports/index.html` (`?survey=<survey.json URL>&collector=<Worker endpoint>`로 미리 채움, `REPORT_SECRET`은 직접 입력; 비밀번호는 sessionStorage에만 저장). Google Form 설문은 Sheet를 CSV로 내려받아 `--source gform-csv`.
+- 응답 확인 (xlsx, 권장): `REPORT_SECRET=… node tools/report.mjs <id> --source worker https://<worker-host>` — 비밀은 환경변수로만 받고 출력하지 않는다.
+- 응답 확인 (웹): `reports/index.html` (`?survey=<survey.json URL>&collector=<Worker endpoint>`로 미리 채움, `REPORT_SECRET`은 직접 입력; HTTPS Worker를 읽으려면 `COLLECTOR_ORIGIN=https://<worker-host> node tools/preview.mjs`로 띄우고 Worker `ALLOWED_ORIGINS`에 미리보기 origin을 추가 — `DEPLOYMENT.md`; 비밀번호는 sessionStorage에만 저장). Google Form 설문은 Sheet를 CSV로 내려받아 `--source gform-csv`.
 - 마감 후 응답: 리포트(웹/xlsx)가 `late`로 표시하고 요약에 `late`(전체)·`late_counted`(집계 대상 중) 건수를 보여 준다. 판정은 `receivedAt`(없거나 해석 불가면 `submittedAt`) > `deadline`. 제외는 하지 않는다.
 - 응답 수·평균: "평가안함"(NA)은 평균과 분모에서 제외된다. 같은 참조 코드(`ref`)로 여러 번 제출하면 최신 1건만 센다 (참조 코드가 없는 응답은 모두 센다). 원본은 `raw` 시트에 전부 남는다.
 - 문의 대응: 링크·QR은 `dist/<id>/`의 파일을 다시 쓰면 된다. 제출 실패 신고는 collector 종류(`worker`는 오류 코드가 보임, `google-form`은 실패가 보이지 않음)를 먼저 확인.

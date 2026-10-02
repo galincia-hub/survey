@@ -6,11 +6,20 @@ const root=new URL('../',import.meta.url);
 const port=Number(process.env.PREVIEW_PORT||18790);
 const collectorPort=Number(process.env.COLLECTOR_PORT||18791);
 for(const value of [process.env.PREVIEW_PORT||18790,process.env.COLLECTOR_PORT||18791]){const n=Number(value);if(!Number.isInteger(n)||n<1024||n>65535||[8790,8791].includes(n))throw new Error('Invalid or reserved local port');}
+// Optional extra connect-src origin so the reports page can read a real Worker. Origin only (https, or loopback http); the Worker's
+// ALLOWED_ORIGINS must also list this preview origin (e.g. http://127.0.0.1:18790).
+const collectorOrigin=(()=>{
+  const value=process.env.COLLECTOR_ORIGIN;if(!value)return '';
+  let u;try{u=new URL(value);}catch{throw new Error('COLLECTOR_ORIGIN must be an absolute URL');}
+  const loopback=u.hostname==='localhost'||u.hostname==='[::1]'||/^127\./.test(u.hostname);
+  if(u.origin!==value.replace(/\/$/,'')||u.username||u.password||!(u.protocol==='https:'||(u.protocol==='http:'&&loopback)))throw new Error('COLLECTOR_ORIGIN must be a bare https origin (or loopback http)');
+  return ' '+u.origin;
+})();
 const bundleRoot=process.env.BUNDLE_ROOT?path.resolve(process.env.BUNDLE_ROOT):null;
 const prefix=process.env.BUNDLE_PREFIX||'';
 const types={html:'text/html',css:'text/css',js:'text/javascript',mjs:'text/javascript',png:'image/png',json:'application/json'};
 http.createServer(async(req,res)=>{
-  res.setHeader('Content-Security-Policy',`default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:*; form-action 'none'; frame-src 'none'; base-uri 'none'`);
+  res.setHeader('Content-Security-Policy',`default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:*${collectorOrigin}; form-action 'none'; frame-src 'none'; base-uri 'none'`);
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Survey-Factory','preview');
   try {

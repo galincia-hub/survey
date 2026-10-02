@@ -4,7 +4,7 @@ import {readFile,mkdir,mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {validate,validateFile,checkSchema} from '../../tools/validate.mjs';
-import {submitResponse,SurveyClosedError,fetchWithTimeout} from '../../engine/storage.js';
+import {submitResponse,SurveyClosedError,fetchWithTimeout,isPreviewHost} from '../../engine/storage.js';
 const sample=JSON.parse(await readFile(new URL('../../surveys/sample-survey/survey.json',import.meta.url)));
 test('schema supports max constraints and unconstrained arrays; dates ordered and identity match clear',()=>{
   assert.ok(checkSchema(9,{type:'number',maximum:8}).length);
@@ -35,10 +35,25 @@ test('worker adapter URL, idempotency header, raw shape, closed error; form gate
     assert.equal(sends,0);
     globalThis.location={hostname:'approved.example',protocol:'https:'};
     let captured;globalThis.fetch=async(url,options)=>{captured=options;return {};};
-    await submitResponse(form,'category',{},'');assert.equal(captured.mode,'no-cors');assert.ok(new URLSearchParams(captured.body).has('entry.1'));
+    await submitResponse(form,'category',{},'');assert.equal(captured.mode,'no-cors');assert.equal(captured.redirect,'follow');assert.ok(new URLSearchParams(captured.body).has('entry.1'));
   }finally{globalThis.fetch=oldFetch;globalThis.location=oldLocation;}
 });
 test('timeout uses AbortController without AbortSignal.timeout',async()=>{
   const oldFetch=globalThis.fetch,old=AbortSignal.timeout;
   try{AbortSignal.timeout=undefined;globalThis.fetch=(url,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted'))));await assert.rejects(fetchWithTimeout('http://127.0.0.1:18802',{},5),/aborted/);}finally{AbortSignal.timeout=old;globalThis.fetch=oldFetch;}
+});
+
+test('worker adapter: production <project>.pages.dev may submit; preview/branch pages.dev and vercel hosts and http stay blocked',async()=>{
+  assert.deepEqual(['sf.pages.dev','my-project.pages.dev','example.org','galincia-hub.github.io'].map(isPreviewHost),[false,false,false,false]);
+  assert.deepEqual(['abc123.sf.pages.dev','feature-x.sf.pages.dev','a.b.sf.pages.dev','sf.vercel.app','sf-git-main-team.vercel.app'].map(isPreviewHost),[true,true,true,true,true]);
+  const oldFetch=globalThis.fetch,oldLocation=globalThis.location;let sends=0;
+  try{
+    globalThis.fetch=async()=>{sends++;return new Response('{"ok":true,"id":"t"}',{status:201});};
+    const content={...sample,collector:{adapter:'worker',endpoint:'https://collector.example.workers.dev'}};
+    globalThis.location={protocol:'https:',hostname:'sf.pages.dev'};
+    await submitResponse(content,'c',{Q01:1},'');assert.equal(sends,1);
+    for(const hostname of ['abc123.sf.pages.dev','sf.vercel.app','x.y.sf.pages.dev']){globalThis.location={protocol:'https:',hostname};await assert.rejects(submitResponse(content,'c',{},''),/disabled/);}
+    globalThis.location={protocol:'http:',hostname:'sf.pages.dev'};await assert.rejects(submitResponse(content,'c',{},''),/disabled/);
+    assert.equal(sends,1);
+  }finally{globalThis.fetch=oldFetch;globalThis.location=oldLocation;}
 });

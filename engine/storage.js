@@ -6,11 +6,14 @@ export function makePayload(content, respondentCategory, answers, ref, now=new D
     : {surveyId:content.surveyId,...common,respondentCategory};
 }
 export function isLoopback(host){return host==='localhost'||host.endsWith('.localhost')||host==='[::1]'||/^127\./.test(host);}
+// Preview deployments must not send to external collectors. Production <project>.pages.dev (exactly one label before pages.dev)
+// is allowed; <hash-or-branch>.<project>.pages.dev and every *.vercel.app host (Vercel previews are indistinguishable) stay blocked.
+export function isPreviewHost(host){return /\.vercel\.app$/.test(host)||/^[^.]+(\.[^.]+)+\.pages\.dev$/.test(host);}
 function safeEndpoint(value) {
   const url=new URL(value);
   if(url.username||url.password||url.hash||url.search || !(url.protocol==='https:' || (url.protocol==='http:'&&isLoopback(url.hostname))))throw new Error('Unsafe collector endpoint');
   // A local/preview origin can only send to loopback, regardless of content configuration.
-  if(location.protocol!=='https:' || isLoopback(location.hostname) || /\.(pages\.dev|vercel\.app)$/.test(location.hostname)) {
+  if(location.protocol!=='https:' || isLoopback(location.hostname) || isPreviewHost(location.hostname)) {
     if(!isLoopback(url.hostname))throw new Error('External submissions disabled on local/preview pages');
   }
   return url;
@@ -28,7 +31,9 @@ export async function submitResponse(content, category, answers, ref, options={}
     const action=safeEndpoint(config.endpoint);
     if(action.origin!=='https://docs.google.com' || !/^\/forms\/d\/e\/[^/]+\/formResponse$/.test(action.pathname) || !/^entry\.\d+$/.test(config.entry||''))throw new Error('Invalid form configuration');
     const body=new URLSearchParams({[config.entry]:JSON.stringify(payload)});
-    await fetchWithTimeout(action,{method:'POST',mode:'no-cors',redirect:'error',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString()});
+    // 확인 필요: formResponse may answer with a redirect. With redirect:'error' that would reject and show a false failure although Google
+    // recorded the answer (duplicate resubmits). 'follow' keeps the opaque no-cors response; verify against the real Form before relying on it.
+    await fetchWithTimeout(action,{method:'POST',mode:'no-cors',redirect:'follow',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString()});
     return {ok:true,confirmation:'opaque'};
   }
   const endpoint=safeEndpoint(config.endpoint);

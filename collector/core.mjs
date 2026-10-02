@@ -125,6 +125,8 @@ export async function handle(request, env, store, opts = {}) {
     raw = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body.bytes);
     const p = JSON.parse(raw);
     if (!p || typeof p !== 'object' || Array.isArray(p)) throw new Error('not an object');
+    // Minimal shape gate (legacy and standard payloads both carry `answers`); raw is stored untouched.
+    if (!p.answers || typeof p.answers !== 'object' || Array.isArray(p.answers)) throw new Error('answers must be an object');
   } catch {
     return reply(400, { ok: false, error: 'invalid_payload' });
   }
