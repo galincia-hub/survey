@@ -6,6 +6,8 @@ dist/
 .dev.vars
 secrets/
 *secret*
+report-secret.json
+**/report-secret.json
 companies*.csv
 *mapping*.csv
 links*.csv

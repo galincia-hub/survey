@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import ExcelJS from 'exceljs';
-import { build, importsOf, libClosure, scanOutput, buildVercelJson, BuildError } from '../../tools/build-report-site.mjs';
+import { build, parseArgs, importsOf, libClosure, scanOutput, buildVercelJson, BuildError } from '../../tools/build-report-site.mjs';
 import { parseReportConfig, surveyUrlFrom } from '../../lib/report-config.mjs';
 import { buildXlsx, crc32, colName } from '../../lib/xlsx-writer.mjs';
 import { buildSheets, SHEET_NAMES } from '../../lib/xlsx-rows.mjs';
@@ -151,6 +151,119 @@ test('builder scan: files off the allowlist and secret-like content fail the bui
   // the real shipped files pass (no false positives)
   assert.doesNotThrow(() => scanOutput(mk({}), expected));
   assert.ok(!listFiles(mk({})).some((f) => /secret|\.env|wrangler|response|survey\.json/i.test(f)));
+});
+
+// ---------- --embed-report-secret (FAKE secrets only, temp env files) ----------
+const FAKE_REPORT = 'fake-rpt-4d9e1c7a2b', FAKE_ADMIN = 'fake-adm-91f3a8e6c0';
+const envFile = (text) => { const f = fresh(`env-${Math.random().toString(36).slice(2)}`); fs.writeFileSync(f, text); return f; };
+const FAKE_ENV = envFile(`# fake\nADMIN_SECRET=${FAKE_ADMIN}\nREPORT_SECRET=${FAKE_REPORT}\nOTHER=1\n`);
+const refusesEmbed = (args, re) => assert.throws(() => build(args), (e) => e instanceof BuildError && re.test(e.message) && !e.message.includes(FAKE_REPORT) && !e.message.includes(FAKE_ADMIN), args.join(' '));
+
+test('embed: off by default; on adds exactly reports/report-secret.json with only REPORT_SECRET', () => {
+  const off = fresh('emb-off');
+  assert.ok(!build(['--out', off, ...ARGS]).files.includes('reports/report-secret.json'));
+  assert.ok(!fs.existsSync(path.join(off, 'reports/report-secret.json')));
+  const out = fresh('emb-on');
+  const r = build(['--out', out, ...ARGS, '--embed-report-secret', FAKE_ENV]);
+  assert.equal(r.embeddedSecretChars, FAKE_REPORT.length);
+  assert.deepEqual(listFiles(out), [...listFiles(off), 'reports/report-secret.json'].sort());
+  assert.deepEqual(r.files, listFiles(out));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(out, 'reports/report-secret.json'), 'utf8')), { reportSecret: FAKE_REPORT });
+  // the secret is in that one file only; config stays secret-free; admin secret is nowhere
+  for (const f of listFiles(out)) {
+    const t = fs.readFileSync(path.join(out, f), 'utf8');
+    assert.equal(t.includes(FAKE_REPORT), f === 'reports/report-secret.json', f);
+    assert.ok(!t.includes(FAKE_ADMIN), f);
+  }
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(out, 'reports/report-config.json'), 'utf8')), { collector: COLLECTOR, surveyBase: BASE });
+  // flag position / default path value forms; headers unchanged (everything no-store)
+  const v = JSON.parse(fs.readFileSync(path.join(out, 'vercel.json'), 'utf8'));
+  assert.equal(v.headers.find((h) => h.source === '/(.*)').headers.find((h) => h.key === 'Cache-Control').value, 'no-store');
+  // rebuilding without the flag over an embedded build removes the file
+  build(['--out', out, ...ARGS]);
+  assert.ok(!fs.existsSync(path.join(out, 'reports/report-secret.json')));
+});
+
+test('embed: refuses when --out is inside the repo and not git-ignored (fails closed), allows git-ignored dist/ and outside dirs', () => {
+  // throwaway repo with the files the builder needs but no .gitignore -> dist/ is not ignored
+  const repo = fresh('repo-noignore');
+  fs.mkdirSync(repo);
+  for (const d of ['reports', 'lib', 'engine']) fs.cpSync(path.join(root, d), path.join(repo, d), { recursive: true });
+  assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0);
+  const dist = path.join(repo, 'dist/site');
+  assert.throws(() => build(['--out', dist, ...ARGS, '--embed-report-secret', FAKE_ENV], { repo }), (e) => e instanceof BuildError && /not git-ignored/.test(e.message));
+  assert.ok(!fs.existsSync(dist), 'nothing is written when the embed is refused');
+  assert.equal(build(['--out', dist, ...ARGS], { repo }).files.length, 16, 'the same dir is fine without the flag');
+  fs.rmSync(dist, { recursive: true, force: true });
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'dist/\n');
+  assert.equal(build(['--out', dist, ...ARGS, '--embed-report-secret', FAKE_ENV], { repo }).files.length, 17);
+  // not a git repo at all (inside it): git cannot answer -> refuse
+  const plain = fresh('repo-nogit');
+  fs.mkdirSync(plain);
+  for (const d of ['reports', 'lib', 'engine']) fs.cpSync(path.join(root, d), path.join(plain, d), { recursive: true });
+  assert.throws(() => build(['--out', path.join(plain, 'dist/site'), ...ARGS, '--embed-report-secret', FAKE_ENV], { repo: plain }), /not git-ignored/);
+  // the real repo: dist/ is ignored
+  const d = path.join(root, 'dist', `site-embed-${process.pid}`);
+  try { assert.equal(build(['--out', d, ...ARGS, '--embed-report-secret', FAKE_ENV]).files.length, 17); }
+  finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('embed: ADMIN_SECRET is never embedded; bad env files are refused without printing values', () => {
+  const out = fresh('emb-bad');
+  const bad = (text, re) => refusesEmbed(['--out', out, ...ARGS, '--embed-report-secret', envFile(text)], re);
+  bad(`ADMIN_SECRET=${FAKE_ADMIN}\n`, /exactly one REPORT_SECRET/);
+  bad(`REPORT_SECRET=${FAKE_REPORT}\nREPORT_SECRET=${FAKE_REPORT}x\n`, /exactly one REPORT_SECRET/);
+  bad(`REPORT_SECRET=${FAKE_ADMIN}\nADMIN_SECRET=${FAKE_ADMIN}\n`, /overlaps ADMIN_SECRET/);
+  bad(`REPORT_SECRET=${FAKE_ADMIN}-more\nADMIN_SECRET=${FAKE_ADMIN}\n`, /overlaps ADMIN_SECRET/);
+  bad('REPORT_SECRET=short\n', /at least 8 printable/);
+  bad('REPORT_SECRET=has space inside\n', /at least 8 printable/);
+  refusesEmbed(['--out', out, ...ARGS, '--embed-report-secret', fresh('no-such-env')], /cannot read the secrets env file/);
+  assert.ok(!fs.existsSync(out), 'nothing is written when the embed is refused');
+  // quotes and `export` are accepted; only the REPORT_SECRET line is used
+  const ok = fresh('emb-quoted');
+  build(['--out', ok, ...ARGS, '--embed-report-secret', envFile(`export ADMIN_SECRET='${FAKE_ADMIN}'\nexport REPORT_SECRET="${FAKE_REPORT}"\n`)]);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(ok, 'reports/report-secret.json'), 'utf8')).reportSecret, FAKE_REPORT);
+  // flag parsing: path is optional, never swallows the next option, and may not repeat
+  assert.deepEqual(parseArgs(['--embed-report-secret', '--out', 'x']), { embedSecret: '/home/box/.config/survey-factory/collector-secrets.env', out: 'x' });
+  assert.deepEqual(parseArgs(['--embed-report-secret', '/p/e.env', '--out', 'x']), { embedSecret: '/p/e.env', out: 'x' });
+  assert.throws(() => parseArgs(['--embed-report-secret', 'a', '--embed-report-secret', 'b']), /duplicate/);
+});
+
+test('embed: scanner allows only the exact report-secret.json and still catches other leaks', () => {
+  const mk = () => { const d = fresh(`embscan-${Math.random().toString(36).slice(2)}`); build(['--out', d, ...ARGS, '--embed-report-secret', FAKE_ENV]); return d; };
+  const expected = listFiles(mk());
+  const sec = { file: 'reports/report-secret.json', value: FAKE_REPORT, admin: [FAKE_ADMIN] };
+  assert.doesNotThrow(() => scanOutput(mk(), expected, sec));
+  // without the option the same tree is rejected (file is neither allowlisted nor allowed by name)
+  assert.throws(() => scanOutput(mk(), expected), /forbidden output file/);
+  assert.throws(() => scanOutput(mk(), expected.filter((f) => f !== sec.file)), /allowlist/);
+  const put = (d, f, c) => fs.writeFileSync(path.join(d, f), c);
+  const withEdit = (f, c) => { const d = mk(); put(d, f, c); return d; };
+  assert.throws(() => scanOutput(withEdit(sec.file, JSON.stringify({ reportSecret: FAKE_ADMIN })), expected, sec), /must contain exactly/);
+  assert.throws(() => scanOutput(withEdit(sec.file, JSON.stringify({ reportSecret: FAKE_REPORT, adminSecret: FAKE_ADMIN })), expected, sec), /must contain exactly/);
+  assert.throws(() => scanOutput(withEdit(sec.file, 'not json'), expected, sec), /not valid JSON/);
+  // the secret or the admin secret anywhere else fails the build, even in an otherwise allowed file
+  assert.throws(() => scanOutput(withEdit('reports/report-config.json', `{"x":"${FAKE_REPORT}"}`), expected, sec), /value of a secret environment variable/);
+  assert.throws(() => scanOutput(withEdit('lib/format.mjs', `// ${FAKE_ADMIN}`), expected, sec), /value of a secret environment variable/);
+  // other secret-like content is still detected while the flag is on
+  assert.throws(() => scanOutput(withEdit('lib/format.mjs', "const REPORT_SECRET = 'abcd1234efgh5678ijkl';"), expected, sec), /credential assignment/);
+  assert.throws(() => scanOutput(withEdit('lib/format.mjs', 'x = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"'), expected, sec), /provider token/);
+  // another secret-named file is not covered by the exception
+  const extra = mk(); put(extra, 'reports/other-secret.json', '{}');
+  assert.throws(() => scanOutput(extra, expected.concat('reports/other-secret.json'), sec), /forbidden output file/);
+  const stray = mk(); put(stray, '.env', 'A=1');
+  assert.throws(() => scanOutput(stray, expected, sec), /allowlist/);
+});
+
+test('embed CLI: prints only the char count, never the value; exit 2 on refusal', () => {
+  const run = (...a) => spawnSync(process.execPath, [path.join(root, 'tools/build-report-site.mjs'), ...a], { encoding: 'utf8' });
+  const ok = run('--out', fresh('cli-emb'), ...ARGS, '--embed-report-secret', FAKE_ENV);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, new RegExp(`embedded REPORT_SECRET \\(${FAKE_REPORT.length} chars\\)`));
+  assert.ok(!(ok.stdout + ok.stderr).includes(FAKE_REPORT) && !(ok.stdout + ok.stderr).includes(FAKE_ADMIN));
+  const bad = run('--out', fresh('cli-emb-bad'), ...ARGS, '--embed-report-secret', envFile(`REPORT_SECRET=${FAKE_ADMIN}\nADMIN_SECRET=${FAKE_ADMIN}\n`));
+  assert.equal(bad.status, 2);
+  assert.ok(!(bad.stdout + bad.stderr).includes(FAKE_ADMIN));
 });
 
 test('importsOf: static imports/re-exports only; dynamic import is refused', () => {

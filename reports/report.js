@@ -15,6 +15,7 @@ const SECRET_KEY = 'sf-report-secret'; // sessionStorage only (cleared with the 
 const params = new URLSearchParams(location.search);
 let S = null;
 let config = {}; // optional ./report-config.json (validated); never contains a secret
+let embeddedSecret = ''; // optional ./report-secret.json (access-protected private hosting only); memory only, never stored
 
 const store = {
   get() { try { return sessionStorage.getItem(SECRET_KEY) ?? ''; } catch { return ''; } },
@@ -27,7 +28,7 @@ const surveyUrlFrom = (v) => urlFromId(v, config);
 // Optional same-origin config for hosted builds. 404 / network / parse errors are ignored (local preview is unchanged).
 async function loadConfig() {
   try {
-    const res = await fetch('./report-config.json', { cache: 'no-store', credentials: 'omit' });
+    const res = await fetch('./report-config.json', { cache: 'no-store', credentials: 'same-origin' }); // same-origin: host auth cookies must be sent
     if (!res.ok) return;
     config = parseReportConfig(await res.json());
   } catch { return; }
@@ -38,6 +39,19 @@ async function loadConfig() {
   list.replaceChildren(...(config.surveys ?? []).map((id) => { const o = document.createElement('option'); o.value = id; return o; }));
 }
 
+// Optional same-origin report-secret.json from a build with --embed-report-secret. Absent / invalid -> the password is typed as before.
+async function loadEmbeddedSecret() {
+  try {
+    const res = await fetch('./report-secret.json', { cache: 'no-store', credentials: 'same-origin' });
+    if (!res.ok) return;
+    const body = await res.json();
+    if (typeof body?.reportSecret !== 'string' || !body.reportSecret || body.reportSecret.length > 512) return;
+    embeddedSecret = body.reportSecret;
+  } catch { return; }
+  $('secret').hidden = true;
+  $('secret-label').hidden = true;
+}
+
 async function loadRecords(survey) {
   if ($('source').value === 'file') {
     const f = $('file').files[0];
@@ -46,9 +60,9 @@ async function loadRecords(survey) {
     return $('file-kind').value === 'jsonl' ? parseJsonl(text) : parseGformCsv(text, { surveyId: survey.surveyId });
   }
   const endpoint = $('endpoint').value.trim().replace(/\/+$/, '');
-  const secret = $('secret').value;
-  if (!endpoint || !secret) throw new Error('collector 주소와 비밀번호를 입력해주세요.');
-  store.set(secret);
+  const secret = embeddedSecret || $('secret').value;
+  if (!endpoint || !secret) throw new Error(embeddedSecret ? 'collector 주소를 입력해주세요.' : 'collector 주소와 비밀번호를 입력해주세요.');
+  if (!embeddedSecret) store.set(secret);
   const res = await fetch(`${endpoint}/v1/responses/${encodeURIComponent(survey.surveyId)}`, { headers: { Authorization: `Bearer ${secret}` } });
   if (res.status === 401) throw new Error('비밀번호가 올바르지 않습니다.');
   if (!res.ok) throw new Error(`불러오기 실패 (HTTP ${res.status})`);
@@ -170,4 +184,6 @@ $('copy-prompt').addEventListener('click', () => copy('prompt'));
 if (params.get('survey')) $('survey-url').value = params.get('survey');
 if (params.get('collector')) $('endpoint').value = params.get('collector');
 $('secret').value = store.get();
-const configReady = loadConfig();
+const configReady = Promise.all([loadConfig(), loadEmbeddedSecret()]);
+// With an embedded secret the report opens by itself (survey from ?survey= or the config's defaultSurvey)
+configReady.then(() => { if (embeddedSecret && $('source').value === 'collector' && $('survey-url').value.trim()) load(); });

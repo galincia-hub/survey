@@ -49,9 +49,11 @@ assert.equal(duplicates.length, 1);
 
 // ---- static server for repo root (loopback only) ----
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css' };
+let overlay = {}; // path -> JSON body served instead of / in addition to repo files (hosted-bundle files that are not in the repo)
 function staticServer() {
   const server = http.createServer((req, res) => {
     const p = path.normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname));
+    if (p in overlay) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(overlay[p])); }
     const file = path.join(root, p.endsWith('/') ? p + 'index.html' : p);
     if (!file.startsWith(root) || file.includes('node_modules') || file.includes('.git') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream' });
@@ -60,7 +62,8 @@ function staticServer() {
   return new Promise((r) => server.listen(STATIC, '127.0.0.1', () => r(server)));
 }
 
-let mock, web, chrome, cdp, tmp, blocked = [], errors = [];
+let mock, web, chrome, cdp, tmp, blocked = [], errors = [], surveyReqs = [];
+const HOSTED_SURVEY = /^https:\/\/surveys\.example\/s\/surveys\/([a-z0-9-]+)\/survey\.json$/; // answered from the fixture; any other non-loopback URL stays blocked
 const secrets = { report: REPORT, admin: ADMIN };
 before(async () => {
   mock = await startMock({ port: MOCK, env: { REPORT_SECRET: REPORT, ADMIN_SECRET: ADMIN, ALLOWED_ORIGINS: `http://127.0.0.1:${STATIC}` } });
@@ -83,6 +86,10 @@ before(async () => {
   cdp.setHandler((m) => {
     if (m.method === 'Fetch.requestPaused') {
       const u = m.params.request.url;
+      if (HOSTED_SURVEY.test(u)) {
+        surveyReqs.push(u);
+        return void cdp.call('Fetch.fulfillRequest', { requestId: m.params.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Access-Control-Allow-Origin', value: '*' }], body: Buffer.from(JSON.stringify(survey)).toString('base64') }).catch(() => {});
+      }
       const ok = !/^https?:/.test(u) || new URL(u).hostname === '127.0.0.1';
       if (!ok) blocked.push(u);
       cdp.call(ok ? 'Fetch.continueRequest' : 'Fetch.failRequest', ok ? { requestId: m.params.requestId } : { requestId: m.params.requestId, errorReason: 'BlockedByClient' }).catch(() => {});
@@ -215,6 +222,68 @@ test('reports page: late rows and summary count (file envelopes, receivedAt vs d
   assert.deepEqual(errors.filter(Boolean).length, 0);
 });
 
+// ---- hosted bundle with an embedded report secret (report-secret.json is served by the overlay; FAKE secret only) ----
+const HOSTED_CONFIG = { collector: 'https://collector.example', surveyBase: 'https://surveys.example/s/surveys/', defaultSurvey: survey.surveyId, surveys: [survey.surveyId, 'other-002'] };
+async function openHosted(files, query = '') {
+  overlay = files; surveyReqs = []; blocked.length = 0; errors.length = 0;
+  await cdp.call('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await cdp.call('Page.navigate', { url: `http://127.0.0.1:${STATIC}/reports/index.html?collector=${encodeURIComponent(`http://127.0.0.1:${MOCK}`)}${query}` });
+  await waitFor(`document.readyState==='complete' && !!document.getElementById('load')`, 'hosted page load');
+  await ev(`sessionStorage.clear(); true`);
+}
+const SECRET_FILE_PATH = '/reports/report-secret.json', CONFIG_PATH = '/reports/report-config.json';
+
+test('reports page + embedded secret: password hidden, default survey auto-loads, changing the survey reloads', async () => {
+  await openHosted({ [SECRET_FILE_PATH]: { reportSecret: REPORT }, [CONFIG_PATH]: HOSTED_CONFIG });
+  await waitFor(`!document.getElementById('report').hidden`, 'auto-loaded report');
+  assert.equal(await ev(`document.getElementById('status').textContent`), `응답 ${all.length}건 불러옴 (집계 ${records.length}, 중복 ${duplicates.length})`);
+  assert.deepEqual(surveyReqs, [`https://surveys.example/s/surveys/${survey.surveyId}/survey.json`]);
+  assert.equal(await ev(`document.getElementById('secret').hidden`), true);
+  assert.equal(await ev(`document.getElementById('secret-label').hidden`), true);
+  assert.equal(await ev(`getComputedStyle(document.getElementById('secret')).display`), 'none');
+  assert.equal(await ev(`document.getElementById('sum-n').textContent`), String(stats.n));
+  // the secret is only in memory: not in storage, URL or the DOM
+  assert.equal(await ev(`sessionStorage.getItem('sf-report-secret')`), null);
+  assert.equal(await ev(`JSON.stringify(localStorage)`), '{}');
+  assert.ok(!(await ev(`location.href`)).includes(REPORT));
+  assert.ok(!(await ev(`document.documentElement.outerHTML`)).includes(REPORT));
+  // the survey picker stays usable: another id + 불러오기 reloads
+  await ev(`document.getElementById('status').textContent=''; document.getElementById('survey-url').value='other-002'; document.getElementById('load').click(); true`);
+  await waitFor(`document.getElementById('status').textContent.startsWith('응답')`, 'reload');
+  assert.deepEqual(surveyReqs, [`https://surveys.example/s/surveys/${survey.surveyId}/survey.json`, 'https://surveys.example/s/surveys/other-002/survey.json']);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(blocked, []);
+  overlay = {};
+});
+
+test('reports page + embedded secret: ?survey= wins over the config default; unusable secret file is ignored', async () => {
+  await openHosted({ [SECRET_FILE_PATH]: { reportSecret: REPORT }, [CONFIG_PATH]: { ...HOSTED_CONFIG, defaultSurvey: 'other-002' } }, `&survey=${encodeURIComponent(SURVEY_PATH)}`);
+  await waitFor(`!document.getElementById('report').hidden`, 'auto-load via ?survey=');
+  assert.deepEqual(surveyReqs, []); // fixture path, not the hosted default
+  for (const bad of [{ reportSecret: '' }, { reportSecret: 5 }, [], { other: REPORT }]) {
+    await openHosted({ [SECRET_FILE_PATH]: bad, [CONFIG_PATH]: HOSTED_CONFIG });
+    await delay(700);
+    assert.equal(await ev(`document.getElementById('secret').hidden`), false, JSON.stringify(bad));
+    assert.equal(await ev(`document.getElementById('report').hidden`), true, 'no auto-load without a usable secret');
+  }
+  overlay = {};
+});
+
+test('reports page without report-secret.json: password stays visible, no auto-load, typed flow works', async () => {
+  await openHosted({ [CONFIG_PATH]: HOSTED_CONFIG });
+  await delay(700);
+  assert.equal(await ev(`document.getElementById('secret').hidden`), false);
+  assert.equal(await ev(`document.getElementById('secret-label').hidden`), false);
+  assert.equal(await ev(`document.getElementById('report').hidden`), true);
+  assert.deepEqual(surveyReqs, []);
+  await ev(`document.getElementById('secret').value=${JSON.stringify(REPORT)}; document.getElementById('load').click(); true`);
+  await waitFor(`!document.getElementById('report').hidden`, 'typed flow');
+  assert.equal(await ev(`sessionStorage.getItem('sf-report-secret')`), REPORT);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(blocked, []);
+  overlay = {};
+});
+
 test('no secret string appears in any served static file', () => {
   const dirs = ['reports', 'lib', 'tools', 'collector', 'engine', 'schema'];
   const files = [];
@@ -228,4 +297,6 @@ test('no secret string appears in any served static file', () => {
   // reports page never reads secrets from config: only from the input element
   const js = fs.readFileSync(path.join(root, 'reports/report.js'), 'utf8');
   assert.ok(!/localStorage/.test(js));
+  // an embedded secret is held in memory only
+  assert.ok(!/sessionStorage\.setItem\([^)]*embeddedSecret/.test(js) && /if \(!embeddedSecret\) store\.set/.test(js));
 });

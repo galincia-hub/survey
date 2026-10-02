@@ -70,3 +70,21 @@ node tools/build-report-site.mjs --out dist/report-site \
 - 리포트 비밀번호(`REPORT_SECRET`)는 **화면에서 직접 입력**한다. 설정 파일·URL·빌드 인자에 넣지 않으며 이 탭의 sessionStorage에만 남는다. 빌더는 비밀처럼 보이는 내용이 출력에 있으면 빌드를 실패시킨다.
 - **Vercel Deployment Protection(비밀번호/SSO 보호)을 반드시 켠다.** 번들 자체는 정적 파일이라 접근 제어는 호스트 보호에 의존한다. collector의 `ALLOWED_ORIGINS`에 리포트 배포 origin을 추가해야 응답을 읽을 수 있다.
 - 화면: 요약 KPI · 영역/문항별 점수 막대(기준선) · 선택형 분포 · 참여 구분별 비교 · 주관식(관련 점수 포함) · `Excel 다운로드`(브라우저에서 `tools/report.mjs`와 같은 6개 시트 생성). 기존 표/복사/AI 프롬프트는 "데이터 / 복사"에 있다.
+
+### 비공개 호스팅에서 비밀번호 입력 없이 열기 (`--embed-report-secret`)
+
+비밀번호 입력 없이 바로 결과를 보려면 빌드할 때 리포트 비밀번호를 번들에 넣는다. **선택 사항이며 기본은 꺼져 있다.**
+
+```
+node tools/build-report-site.mjs --out dist/report-site-private \
+  --collector https://<worker-host> --survey-base https://<pages-host>/<path>/surveys/ \
+  --default-survey <id> --embed-report-secret [<env 파일>]
+```
+
+- `<env 파일>` 기본값은 `/home/box/.config/survey-factory/collector-secrets.env`. 이 파일에서 `REPORT_SECRET=` 한 줄만 읽는다. `ADMIN_SECRET`은 절대 넣지 않으며, 두 값이 겹치면 빌드를 거부한다.
+- 값은 `reports/report-secret.json`(`{"reportSecret": "..."}`) 한 파일에만 들어간다. `report-config.json`에는 비밀이 없다. 값은 출력하지 않고 `embedded REPORT_SECRET (N chars)`만 표시한다. `.gitignore`가 `report-secret.json`을 제외한다.
+- `--out`이 저장소 안이면 git이 무시하는 위치(`dist/`)일 때만, 저장소 밖이면 항상 허용한다. 확인할 수 없으면 거부한다. 비밀 스캐너는 이 파일 하나만 예외로 허용하고, 그 밖의 비밀처럼 보이는 내용이나 같은 값이 다른 파일에 있으면 빌드를 실패시킨다.
+- **이 번들은 Vercel 업로드에만 쓴다.** GitHub Pages 등 공개 호스트·저장소·로그에 올리지 않는다.
+- 보호는 **Vercel Authentication(ALL deployments)** 에 전적으로 의존한다. 로그인하지 않은 사람은 `report-secret.json`을 받을 수 없어야 한다. 보호가 꺼진 배포에 올리면 비밀번호가 그대로 공개된다.
+- Worker(collector)는 여전히 `REPORT_SECRET`을 요구한다. 파일이 있으면 리포트 페이지가 비밀번호 칸을 숨기고 그 값으로 요청하며(sessionStorage에는 저장하지 않음) 기본 설문(`--default-survey` 또는 `?survey=`)을 열자마자 불러온다. 설문을 바꾸고 `불러오기`를 누르면 다시 불러온다. 파일이 없으면 기존처럼 비밀번호를 직접 입력한다.
+- 비밀번호를 바꾸면(Worker 교체) 다시 빌드·업로드한다.
