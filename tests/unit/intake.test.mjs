@@ -10,7 +10,7 @@ import { containsForbidden, FORBIDDEN_WORD } from '../../lib/kakao.mjs';
 
 const here = (p) => new URL(p, import.meta.url).pathname;
 const memo = fs.readFileSync(here('../fixtures/memos/sample-memo.txt'), 'utf8');
-const schema = JSON.parse(fs.readFileSync(here('../fixtures/survey.schema.json'), 'utf8'));
+const schema = JSON.parse(fs.readFileSync(here('../../schema/survey.schema.json'), 'utf8'));
 
 // minimal JSON-schema subset check (type, required, additionalProperties, enum, pattern, min*, items)
 function check(s, v, p = '$') {

@@ -42,7 +42,14 @@
   },
   "distribution": {
     "deadlineText": "응답 마감: 2026년 10월 6일",
-    "sender": "CRUISE INTERNATIONAL"
+    "sender": "CRUISE INTERNATIONAL",
+    "greeting": "안녕하세요.",
+    "thanks": "아도라 메디테라니아 방선투어에 함께해 주셔서 감사합니다.",
+    "purpose": "방선 중 확인하신 선박 상태와 운영 개선 의견을 듣고자 합니다.",
+    "whyYou": "판매와 운영을 경험하신 전문가 여러분의 의견이 중요합니다.",
+    "usage": "의견을 정리해 아도라 측에 전달하고 한국 전세선 준비에 반영하겠습니다.",
+    "ask": "애정을 가지고 적극적인 의견을 부탁드립니다.",
+    "ripple": "함께 참석하신 주변 분들께도 설문 참여를 권해 주세요."
   },
   "collector": {
     "adapter": "local-mock",
@@ -56,6 +63,47 @@
     "baselineName": "COSTA"
   },
   "conversion": {
-    "allTextRequired": true
+    "allTextRequired": true,
+    "questionOverrides": {
+      "O01": {
+        "shortLabel": "관리상태"
+      },
+      "O02": {
+        "shortLabel": "청결"
+      },
+      "O03": {
+        "shortLabel": "시설 유지"
+      },
+      "F01": {
+        "shortLabel": "공연"
+      },
+      "F02": {
+        "shortLabel": "바/라운지"
+      },
+      "F03": {
+        "shortLabel": "수영장"
+      },
+      "F04": {
+        "shortLabel": "야외데크"
+      },
+      "F05": {
+        "shortLabel": "식당"
+      },
+      "F06": {
+        "shortLabel": "유료식당"
+      },
+      "S01": {
+        "shortLabel": "음식"
+      },
+      "S02": {
+        "shortLabel": "식음 서비스"
+      },
+      "S03": {
+        "shortLabel": "승무원"
+      },
+      "R01": {
+        "shortLabel": "종합평가"
+      }
+    }
   }
 }

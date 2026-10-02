@@ -26,13 +26,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const opt = (n) => { const i = args.indexOf(n); return i < 0 ? undefined : args[i + 1]; };
   const surveyPath = args[0], source = opt('--source'), file = args[args.indexOf('--source') + 2], out = opt('--out');
-  if (!surveyPath || !['jsonl', 'gform-csv'].includes(source) || !file || !out) {
-    console.error('usage: report.mjs <surveyJsonPath> --source jsonl|gform-csv <file> --out <dir>');
+  if (!surveyPath || !['jsonl', 'gform-csv'].includes(source) || !file) {
+    console.error('usage: report.mjs <surveyId|surveyJsonPath> --source jsonl|gform-csv <file> [--out <dir>]');
     process.exit(2);
   }
-  const survey = JSON.parse(fs.readFileSync(surveyPath, 'utf8'));
+  const survey = JSON.parse(fs.readFileSync(surveyPath.endsWith('.json')?surveyPath:path.join('surveys',surveyPath,'survey.json'), 'utf8'));
   const text = fs.readFileSync(file, 'utf8');
   const records = source === 'jsonl' ? parseJsonl(text) : parseGformCsv(text, { surveyId: survey.surveyId });
-  const r = await writeReport(survey, records, out);
+  const r = await writeReport(survey, records.filter(r=>!r.surveyId||r.surveyId===survey.surveyId), out||path.join('dist',survey.surveyId,'reports'));
   console.log(`wrote ${r.xlsx}\nwrote ${r.txt}`);
 }

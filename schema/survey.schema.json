@@ -78,6 +78,9 @@
         "emphasisParagraph": {
           "type": "integer",
           "minimum": 0
+        },
+        "headline": {
+          "type": "string"
         }
       },
       "required": [
@@ -252,6 +255,12 @@
                 },
                 "identity": {
                   "type": "boolean"
+                },
+                "shortLabel": {
+                  "type": "string"
+                },
+                "allowNotEvaluated": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -268,7 +277,6 @@
           "id",
           "title",
           "subtitle",
-          "theme",
           "questions"
         ]
       },
@@ -308,6 +316,27 @@
         },
         "sender": {
           "type": "string"
+        },
+        "greeting": {
+          "type": "string"
+        },
+        "thanks": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "whyYou": {
+          "type": "string"
+        },
+        "usage": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "ripple": {
+          "type": "string"
         }
       },
       "required": [
@@ -321,12 +350,26 @@
       "properties": {
         "adapter": {
           "enum": [
-            "local-mock"
+            "local-mock",
+            "worker",
+            "google-form"
           ]
         },
         "endpoint": {
           "type": "string",
-          "pattern": "^http://127\\.0\\.0\\.1:[0-9]{1,5}/submit$"
+          "minLength": 1
+        },
+        "allowedHosts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9.-]+$"
+          }
+        },
+        "entry": {
+          "type": "string",
+          "pattern": "^entry\\.\\d+$"
         }
       },
       "required": [
@@ -352,6 +395,72 @@
       "required": [
         "format"
       ]
+    },
+    "messages": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "string"
+        },
+        "back": {
+          "type": "string"
+        },
+        "submit": {
+          "type": "string"
+        },
+        "submitting": {
+          "type": "string"
+        },
+        "retry": {
+          "type": "string"
+        },
+        "placeholder": {
+          "type": "string"
+        },
+        "selectedScore": {
+          "type": "string"
+        },
+        "moveHint": {
+          "type": "string"
+        },
+        "unable": {
+          "type": "string"
+        },
+        "unableHelp": {
+          "type": "string"
+        },
+        "requiredText": {
+          "type": "string"
+        },
+        "requiredAnswer": {
+          "type": "string"
+        },
+        "requiredSummary": {
+          "type": "string"
+        },
+        "counter": {
+          "type": "string"
+        },
+        "thanks": {
+          "type": "string"
+        },
+        "closed": {
+          "type": "string"
+        },
+        "submitError": {
+          "type": "string"
+        },
+        "loadError": {
+          "type": "string"
+        },
+        "categoryRequired": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        }
+      }
     }
   },
   "required": [

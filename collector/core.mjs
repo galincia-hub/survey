@@ -7,12 +7,9 @@
 //   GET  /v1/responses/:surveyId       Authorization: Bearer REPORT_SECRET -> envelopes {id,surveyId,receivedAt,raw}
 //   PUT  /v1/admin/surveys/:surveyId   Authorization: Bearer ADMIN_SECRET, body {version,deadline,status} (surveyId from path)
 //
-// Auto-close rule: a survey is closed when status == "closed", or when now >= 00:00 Asia/Seoul of the day AFTER
-// the deadline's Seoul calendar date (i.e. the deadline day is accepted through 23:59:59.999 KST, whatever time
-// of day the deadline string carries). deadline = null means no time limit.
+// Closing time is the exact ISO timestamp from content. Null means no time limit.
 
 export const MAX_BODY_BYTES = 64 * 1024;
-const KST_MS = 9 * 3600e3, DAY_MS = 24 * 3600e3;
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Epoch ms at which the survey stops accepting responses, or null. */
@@ -20,14 +17,13 @@ export function closeAtMs(deadline) {
   if (deadline === null || deadline === undefined || deadline === '') return null;
   const t = Date.parse(deadline);
   if (Number.isNaN(t)) return null;
-  const kstDayStartUtc = Math.floor((t + KST_MS) / DAY_MS) * DAY_MS - KST_MS;
-  return kstDayStartUtc + DAY_MS;
+  return t;
 }
 
 export function isOpen(survey, now = Date.now()) {
   if (survey.status === 'closed') return false;
   const c = closeAtMs(survey.deadline);
-  return c === null || now < c;
+  return c === null || now <= c;
 }
 
 const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers } });

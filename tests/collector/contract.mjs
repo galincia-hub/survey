@@ -26,7 +26,7 @@ export function contractSuite(label, getBase) {
 
   test(`[${label}] submit ok -> raw byte-equal on read; status public`, async () => {
     await put('open-1', { version: '1', deadline: '2099-12-31T23:59:59+09:00', status: 'open' });
-    const raw = '{ "version":"v1",  "ref":"", "affiliation":"모두투어","answers":{"Q1":12,"T":"한글 \\" 줄\\n바꿈 😀"},"submittedAt":"2026-10-02T00:00:00.000Z" }';
+    const raw = '{ "version":"v1",  "ref":"", "affiliation":"참가자","answers":{"Q1":12,"T":"한글 \\" 줄\\n바꿈 😀"},"submittedAt":"2026-10-02T00:00:00.000Z" }';
     const r = await post('open-1', raw);
     assert.equal(r.status, 201);
     const { ok, id } = await r.json();

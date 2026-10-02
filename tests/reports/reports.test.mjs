@@ -14,7 +14,7 @@ import { linkedPrefix, fmt1 } from '../../lib/format.mjs';
 import { connect, getJSON, delay } from '../helpers/cdp.mjs';
 
 const root = new URL('../../', import.meta.url).pathname;
-const MOCK = 18796, STATIC = 18797, CDP = 18798;
+const MOCK = 18806, STATIC = 18807, CDP = 18808;
 const REPORT = 'rpt-secret-7f3a91c2e5', ADMIN = 'adm-secret-b81d40aa17';
 const SURVEY_PATH = '/tests/fixtures/surveys/adora-ship-visit-001.json';
 const survey = JSON.parse(fs.readFileSync(path.join(root, SURVEY_PATH), 'utf8'));

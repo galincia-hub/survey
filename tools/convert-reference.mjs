@@ -12,7 +12,8 @@ export function convert(bank, presentation) {
       questions:list.filter(q=>q.area===id).map(({area, ...q}) => ({
         ...q, type:q.type==='score20'?'score':q.type,
         ...(q.type==='text'?{required:conversion.allTextRequired || !!q.required,maxLength:1000,
-          linkedScores:list.filter(s=>s.area===id && s.type==='score20').map(s=>s.id)}:{})
+          linkedScores:list.filter(s=>s.area===id && s.type==='score20').map(s=>s.id)}:{}),
+        ...conversion.questionOverrides?.[q.id]
       }))
     }))
   };

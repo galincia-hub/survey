@@ -11,20 +11,18 @@ import { contractSuite, SECRETS, ORIGIN } from './contract.mjs';
 
 const root = new URL('../../', import.meta.url).pathname;
 const wrangler = path.join(root, 'node_modules/.bin/wrangler');
-const MOCK_PORT = 18792, WORKER_PORT = 18793, INSPECTOR_PORT = 18794;
+const MOCK_PORT = 18803, WORKER_PORT = 18804, INSPECTOR_PORT = 18805;
 
 // ---------- unit: deadline rule ----------
-test('close rule: end of deadline day, Asia/Seoul', () => {
+test('close rule: exact timestamp, shared with client', () => {
   const T = (s) => Date.parse(s);
   const dl = '2026-10-06T23:59:59+09:00';
-  assert.equal(closeAtMs(dl), T('2026-10-07T00:00:00+09:00'));
-  assert.equal(closeAtMs('2026-10-06T00:00:00+09:00'), T('2026-10-07T00:00:00+09:00'));
-  assert.equal(closeAtMs('2026-10-06T15:30:00Z'), T('2026-10-08T00:00:00+09:00')); // = 10-07 00:30 KST -> day 10-07
-  assert.equal(closeAtMs('2026-10-06'), T('2026-10-07T00:00:00+09:00'));
+  assert.equal(closeAtMs(dl), T(dl));
+  assert.equal(closeAtMs('2026-10-06T12:00:00+09:00'), T('2026-10-06T03:00:00Z'));
   assert.equal(closeAtMs(null), null);
   const s = { deadline: dl, status: 'open' };
-  assert.equal(isOpen(s, T('2026-10-06T23:59:59.999+09:00')), true);
-  assert.equal(isOpen(s, T('2026-10-07T00:00:00+09:00')), false);
+  assert.equal(isOpen(s, T(dl)), true);
+  assert.equal(isOpen(s, T(dl)+1), false);
   assert.equal(isOpen({ deadline: null, status: 'closed' }, 0), false);
 });
 
@@ -39,8 +37,8 @@ test('close rule: end of deadline day, Asia/Seoul', () => {
 // ---------- real worker via wrangler dev --local ----------
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-wrangler-'));
 const cfg = path.join(tmp, 'wrangler.toml');
-const state = path.join(root, '.wrangler/state');
-const env = { ...process.env, HOME: tmp, XDG_CONFIG_HOME: tmp, WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' };
+const state = path.join(tmp, 'state');
+const env = { ...process.env, XDG_CONFIG_WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' };
 let child, log = '', workerUp = false, skipReason = null;
 
 async function waitPort(port, ms) {

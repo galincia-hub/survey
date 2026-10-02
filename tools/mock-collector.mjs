@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Node mock of the shared collector: same handle() as the Cloudflare Worker, in-memory (optionally jsonl-backed) store.
-// Env: PORT (default 18792), REPORT_SECRET, ADMIN_SECRET, ALLOWED_ORIGINS, STORE_FILE (optional jsonl of envelopes).
+// Env: COLLECTOR_PORT (default 18802), REPORT_SECRET, ADMIN_SECRET, ALLOWED_ORIGINS, STORE_FILE (optional jsonl of envelopes).
 import http from 'node:http';
 import fs from 'node:fs';
 import { handle } from '../collector/core.mjs';
@@ -26,7 +26,8 @@ export function memoryStore({ file } = {}) {
 }
 
 /** @returns {Promise<{server, port, store, close}>}  port 0 = ephemeral; binds loopback only */
-export async function startMock({ port = Number(process.env.PORT ?? 18792), env = process.env, store = memoryStore({ file: process.env.STORE_FILE }) } = {}) {
+export async function startMock({ port = Number(process.env.COLLECTOR_PORT ?? 18802), env = process.env, store = memoryStore({ file: process.env.STORE_FILE }) } = {}) {
+  if([8790,8791,18790,18791].includes(port))throw new Error('Reserved port');
   const server = http.createServer(async (req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -39,7 +40,7 @@ export async function startMock({ port = Number(process.env.PORT ?? 18792), env 
       res.end(Buffer.from(await out.arrayBuffer()));
     });
   });
-  await new Promise((r) => server.listen(port, '127.0.0.1', r));
+  await new Promise((r,j) => {server.once('error',j);server.listen(port, '127.0.0.1', r);});
   return { server, store, port: server.address().port, close: () => new Promise((r) => { server.close(r); server.closeAllConnections?.(); }) };
 }
 
