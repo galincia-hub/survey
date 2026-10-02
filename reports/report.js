@@ -1,4 +1,4 @@
-import { normalizeResponse, dedupeLatest } from '../lib/normalize.mjs';
+import { normalizeResponse, dedupeLatest, markLate } from '../lib/normalize.mjs';
 import { computeStats, scoreQuestions } from '../lib/stats.mjs';
 import { buildCopyText } from '../lib/copytext.mjs';
 import { buildAiPrompt } from '../lib/prompt.mjs';
@@ -66,14 +66,14 @@ function render() {
   $('report').hidden = false;
   const qs = survey.sections.flatMap((s) => s.questions);
   const dupSet = new Set(duplicates);
-  const deadline = Date.parse(survey.deadline);
-  const late = (r) => { const t = Date.parse(r.receivedAt ?? ''); return !Number.isNaN(t) && !Number.isNaN(deadline) && t > deadline; };
+  markLate(all, survey.deadline);
+  const lateAll = all.filter((r) => r.late).length, lateCounted = records.filter((r) => r.late).length;
 
   // A. responses
   $('view-a').innerHTML = `<h2>A. 응답 (${all.length}건)</h2><div class="scroll"><table id="tbl-responses"><thead><tr>
-    <th>ref</th><th>구분</th><th>제출</th><th>수신</th><th>상태</th>${qs.map((q) => `<th title="${esc(q.prompt)}">${esc(q.id)}</th>`).join('')}</tr></thead><tbody>
-    ${all.map((r) => `<tr class="${dupSet.has(r) ? 'dup' : ''}"><td>${esc(r.ref)}</td><td>${esc(r.category)}</td><td>${esc(r.submittedAt)}</td><td>${esc(r.receivedAt)}</td>
-    <td>${dupSet.has(r) ? '중복(제외)' : '집계'}${late(r) ? ' · 마감후' : ''}</td>
+    <th>ref</th><th>구분</th><th>제출</th><th>수신</th><th>상태</th><th>마감후</th>${qs.map((q) => `<th title="${esc(q.prompt)}">${esc(q.id)}</th>`).join('')}</tr></thead><tbody>
+    ${all.map((r) => `<tr class="${dupSet.has(r) ? 'dup' : ''}${r.late ? ' late' : ''}" data-late="${r.late}"><td>${esc(r.ref)}</td><td>${esc(r.category)}</td><td>${esc(r.submittedAt)}</td><td>${esc(r.receivedAt)}</td>
+    <td>${dupSet.has(r) ? '중복(제외)' : '집계'}</td><td class="late-cell">${r.late ? '마감후' : ''}</td>
     ${qs.map((q) => `<td class="${q.type === 'text' ? 'text' : 'num'}" data-q="${esc(q.id)}">${esc(cellVal(r.answers[q.id]))}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div>`;
 
@@ -81,6 +81,7 @@ function render() {
   const areaRows = Object.values(stats.areas);
   $('view-b').innerHTML = `<h2>B. 요약</h2>
     <p>총 응답수 <b id="sum-n">${stats.n}</b> (중복 제외 ${duplicates.length}건)</p>
+    <p>마감 후 수신 <b id="sum-late">${lateAll}</b>건 (집계 대상 중 ${lateCounted}건) — 표시만 하며 통계에서 제외하지 않습니다.</p>
     <div class="scroll"><table id="tbl-cat"><thead><tr><th>참여 구분</th><th>응답수</th>${areaRows.map((a) => `<th>${esc(a.title)}</th>`).join('')}<th>종합</th></tr></thead><tbody>
     ${stats.categories.map((c) => `<tr><td>${esc(c)}</td><td class="num">${stats.nByCategory[c]}</td>${areaRows.map((a) => `<td class="num">${fmt1(a.byCategory[c])}</td>`).join('')}<td class="num">${fmt1(stats.overallByCategory[c])}</td></tr>`).join('')}
     <tr><th>전체</th><th class="num">${stats.n}</th>${areaRows.map((a) => `<th class="num">${fmt1(a.avg)}</th>`).join('')}<th class="num" id="sum-overall">${fmt1(stats.overall.avg)}</th></tr>

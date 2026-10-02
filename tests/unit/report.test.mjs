@@ -12,6 +12,8 @@ import { writeReport } from '../../tools/report.mjs';
 import { distribute } from '../../tools/distribute.mjs';
 import { SHEET_NAMES } from '../../lib/xlsx-rows.mjs';
 import { containsForbidden } from '../../lib/kakao.mjs';
+import { buildSheets } from '../../lib/xlsx-rows.mjs';
+import { normalizeResponse } from '../../lib/normalize.mjs';
 import { mini, fixture } from './helpers.mjs';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sflib-'));
@@ -53,10 +55,10 @@ test('xlsx re-read: sheets and cells; CLI end to end', async () => {
   const get = (n) => wb.getWorksheet(n).getSheetValues().slice(1).map((r) => r.slice(1));
   const raw = get('raw'); assert.equal(raw.length, 4); assert.equal(raw[1][6], false); assert.equal(raw[2][6], true); // earlier dup flagged
   const responses = get('responses'); assert.equal(responses.length, 3); // dup removed
-  assert.deepEqual(responses[0].slice(0, 3), ['ref', 'category', 'submittedAt']);
-  assert.equal(responses[1][3], 14); // latest G1-01 Q1
+  assert.deepEqual(responses[0].slice(0, 4), ['ref', 'category', 'submittedAt', 'late']);
+  assert.equal(responses[1][4], 14); // latest G1-01 Q1
   const summary = Object.fromEntries(get('summary').slice(1));
-  assert.equal(summary.responses, 2); assert.equal(summary.duplicates_excluded, 1); assert.equal(summary['n:A사'], 1);
+  assert.equal(summary.responses, 2); assert.equal(summary.duplicates_excluded, 1); assert.equal(summary.late, 0); // Sheet locale timestamps fall back to submittedAt (before deadline) assert.equal(summary['n:A사'], 1);
   const qs = get('questions'); const q1 = qs.find((r) => r[0] === 'Q1');
   assert.equal(q1[4], 11); assert.equal(q1[5], 1); assert.equal(q1[6], 2); // avg of 14 and 8, delta, valid
   const q3 = qs.find((r) => r[0] === 'Q3'); assert.equal(q3[7], 1); // NA count
@@ -77,4 +79,22 @@ test('QR decode round-trip equals URL; kakao.txt and link.txt written', async ()
   const k = fs.readFileSync(path.join(dir, 'kakao.txt'), 'utf8');
   assert.ok(k.includes(url) && !containsForbidden(k));
   assert.ok(QRCode); // dependency present
+});
+
+test('late flag: raw/responses columns and summary counts (late counted vs duplicate)', () => {
+  const sv = mini(); // deadline 2026-10-06T23:59:59+09:00
+  const mk = (ref, answers, submittedAt, receivedAt, id) => normalizeResponse(P(ref, 'A사', answers, submittedAt), { id, receivedAt });
+  const recs = [
+    mk('G1-01', { Q1: 5 }, '2026-10-02T01:00:00Z', '2026-10-02T01:00:01Z', 1),        // dup (older), on time
+    mk('G1-01', { Q1: 7 }, '2026-10-07T00:00:00Z', '2026-10-07T00:00:01Z', 2),        // late, counted
+    mk('G1-02', { Q1: 9 }, '2026-10-02T00:00:00Z', '2026-10-07T01:00:00Z', 3),        // submitted early, received late -> late
+    mk('G1-03', { Q1: 3 }, '2026-10-06T14:59:59Z', '2026-10-06T14:59:59Z', 4),        // exactly at deadline -> not late
+  ];
+  const { raw, responses, summary } = buildSheets(sv, recs);
+  const rawLate = raw[0].indexOf('late'), respLate = responses[0].indexOf('late');
+  assert.deepEqual(raw.slice(1).map((r) => r[rawLate]), [false, true, true, false]);
+  assert.equal(responses[0][respLate], 'late');
+  assert.deepEqual(responses.slice(1).map((r) => [r[0], r[respLate]]), [['G1-01', true], ['G1-02', true], ['G1-03', false]]);
+  const sm = Object.fromEntries(summary.slice(1));
+  assert.equal(sm.late, 2); assert.equal(sm.late_counted, 2); assert.equal(sm.responses, 3);
 });

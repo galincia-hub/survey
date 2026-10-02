@@ -18,7 +18,7 @@ Consistent with `docs/DESIGN.md` §4 (Worker + D1 default; Adora keeps `google-f
 | 단순성 | 코드 없음. Form 1개 + Sheet. 설문마다 Form 을 만들 필요는 없다 (공용 Form 1개 가능). | Worker 1개 + D1 1개를 한 번 배포. 이후 설문은 레지스트리 행(데이터)만 추가. |
 | 무료 한도 (아래 "확인 필요" 참고) | 무료. Google 계정 한도 내. 공개된 응답 건수 상한 없음(Sheet 셀 한도 있음). | 무료 플랜 한도가 예상 트래픽(수십~수백 건)보다 훨씬 큼. |
 | 원본 payload 보존 | 예. 장문 필드 1개에 JSON 그대로, Sheet 에 `타임스탬프 / payload`. | 예. `responses.raw TEXT` 에 요청 본문을 바이트 그대로 (테스트: 읽기 시 byte-equal). |
-| 서버측 자동 마감 | **불가.** Form 전체 수동 토글(응답 받지 않음)만 가능. 리포트에서 `receivedAt > deadline` 표시만 가능. | **가능.** 레지스트리의 deadline(해당 일 23:59:59.999 KST 까지) 또는 `status=closed` → HTTP 410 `survey_closed`. 화면이 닫힘 안내를 표시. |
+| 서버측 자동 마감 | **불가.** Form 전체 수동 토글(응답 받지 않음)만 가능. 리포트가 `receivedAt`(없거나 해석 불가면 `submittedAt`) > 마감 시각인 응답에 `late` 표시만 한다 (통계에서 제외하지 않음). | **가능.** 레지스트리의 deadline(콘텐츠 `deadline`의 **정확한 ISO 시각**, 그 시각 이후는 거부; intake 기본값은 `T23:59:59+09:00`) 또는 `status=closed` → HTTP 410 `survey_closed`. 화면이 닫힘 안내를 표시. |
 | 설문 추가 시 백엔드 변경 | 공용 Form 1개면 없음. | 없음 (`PUT /v1/admin/surveys/:id` 로 레지스트리 upsert, 배포 도구가 호출). |
 | 결과 접근 보호 | Google 계정 권한(강함). 단 리포트를 쓰려면 CSV 를 수동으로 내보내야 한다. | `REPORT_SECRET` Bearer (상수시간 비교, 미설정이면 항상 401). 리포트 페이지가 API 를 직접 읽는다. 비밀번호는 입력값으로만, sessionStorage 에만 둔다. |
 | 실패 명확성 | **불명확.** `no-cors` 불투명 응답이라 성공을 가정한다. 네트워크 오류 외에는 실패를 감지할 수 없다. | **명확.** 실제 201/400/404/410/413 JSON. 응답자에게 오류를 보여줄 수 있다 (SPEC 9 "실패 시 명확한 오류"). |

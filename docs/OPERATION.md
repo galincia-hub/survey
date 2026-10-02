@@ -18,6 +18,7 @@ Status: Draft (Sonnet 5.5, Opus 최종 검토 전)
 ## 2. 일상 운영
 
 - 응답 확인: `reports/index.html` (`?survey=<survey.json URL>&collector=<Worker endpoint>`로 미리 채움, `REPORT_SECRET`은 직접 입력; 비밀번호는 sessionStorage에만 저장). Google Form 설문은 Sheet를 CSV로 내려받아 `--source gform-csv`.
+- 마감 후 응답: 리포트(웹/xlsx)가 `late`로 표시하고 요약에 `late`(전체)·`late_counted`(집계 대상 중) 건수를 보여 준다. 판정은 `receivedAt`(없거나 해석 불가면 `submittedAt`) > `deadline`. 제외는 하지 않는다.
 - 응답 수·평균: "평가안함"(NA)은 평균과 분모에서 제외된다. 같은 참조 코드(`ref`)로 여러 번 제출하면 최신 1건만 센다 (참조 코드가 없는 응답은 모두 센다). 원본은 `raw` 시트에 전부 남는다.
 - 문의 대응: 링크·QR은 `dist/<id>/`의 파일을 다시 쓰면 된다. 제출 실패 신고는 collector 종류(`worker`는 오류 코드가 보임, `google-form`은 실패가 보이지 않음)를 먼저 확인.
 - 응답 데이터(`*.jsonl`, `*.xlsx`, `.wrangler/`, `reports/out/`)는 `.gitignore` 대상이다. 저장소에 올리지 않는다.
@@ -34,10 +35,10 @@ Google Form은 서버측 자동 마감이 없다. 마감 시각(2026-10-06 23:59
 - [ ] Google Form 편집 → 응답 탭 → **"응답 받지 않음"** 으로 전환
 - [ ] 안내 메시지가 화면과 맞는지 확인 (필요 시 "응답이 마감되었습니다")
 - [ ] 응답 Sheet를 CSV로 내려받아 `node tools/report.mjs adora-ship-visit-001 --source gform-csv <csv>`
-- [ ] `raw` 시트의 `receivedAt`/`submittedAt`으로 마감 이후 수신 건 확인 (자동 표시는 없음)
+- [ ] 리포트의 `late`(마감후) 표시와 요약의 `late` 건수 확인 — `receivedAt`(없거나 해석 불가면 `submittedAt`)이 마감 시각보다 늦은 응답. 표시만 하고 통계에서 제외하지 않는다 (Sheet 타임스탬프는 로케일 형식이라 `submittedAt`으로 판정될 수 있음)
 - [ ] 내려받은 CSV/xlsx는 저장소에 올리지 않는다
 
-> 현재 Adora `survey.json`의 collector는 `local-mock`(미리보기용)이다. 공개 전에 `google-form`(`endpoint`, `entry`, `allowedHosts`)으로 바꿔야 하며, 실제 Form 주소·entry ID는 저장소에 없다 (Owner 제공 필요).
+> **`adora-ship-visit-001`은 재현·테스트용 콘텐츠다.** 실제 Adora 설문은 Owner가 `galincia-hub/MD`에서 이미 배포해 운영 중이며, 이 저장소의 `surveys/adora-ship-visit-001/survey.json`(collector `local-mock`)에는 **실제 Google Form 주소·entry ID를 절대 넣지 않는다.** 이 콘텐츠를 공개 배포하지 않는다 (`local-mock`은 `--confirm`에서 거부됨). 마감 시 위 체크리스트는 Owner의 실제 Form/Sheet에 적용하고, 내려받은 CSV만 이 도구로 리포트한다.
 
 ## 4. 데이터 내보내기·리포트
 - `tools/report.mjs`: 시트 `raw / responses / summary / questions / text_linked / report_text` + `report.txt`.

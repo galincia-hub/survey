@@ -83,7 +83,7 @@ try{
     cli('tools/report.mjs',[path.join(surveysDir,id,'survey.json'),'--source','jsonl',jsonl,'--out',path.join(temp,'reports')]);
     const wb=new ExcelJS.Workbook();await wb.xlsx.readFile(path.join(temp,'reports',id+'-report.xlsx'));
     assert.ok(wb.worksheets.map(s=>s.name).includes('summary'));
-    assert.equal(wb.getWorksheet('raw').getCell('H2').value,envelope.raw);
+    assert.equal(wb.getWorksheet('raw').getCell('I2').value,envelope.raw);
     const questions=wb.getWorksheet('questions').getSheetValues().slice(2).map(r=>r.slice(1));
     assert.ok(questions.some(r=>r[0]==='Q01'),'Q01 row present');
     assert.match(await readFile(path.join(temp,'reports/report.txt'),'utf8'),/e2e 의견/);

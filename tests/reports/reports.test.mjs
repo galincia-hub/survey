@@ -196,6 +196,25 @@ test('reports page: local file upload (jsonl) path', async () => {
   assert.deepEqual(blocked, []);
 });
 
+test('reports page: late rows and summary count (file envelopes, receivedAt vs deadline)', async () => {
+  await open(1280, 900, false);
+  const env = (i, receivedAt) => JSON.stringify({ id: i + 1, surveyId: survey.surveyId, receivedAt, raw: payloads[i] });
+  const f = path.join(tmp, 'late.jsonl');
+  // fixture deadline 2026-10-06T23:59:59+09:00: rows 0 and 2 are after it, rows 1 and 3 are on time (row 1 is a duplicate of row 0's ref)
+  fs.writeFileSync(f, [env(0, '2026-10-07T00:00:00Z'), env(1, '2026-10-05T00:00:00Z'), env(2, '2026-10-08T00:00:00Z'), env(3, '2026-10-06T14:59:59Z')].join('\n') + '\n');
+  await ev(`const s=document.getElementById('source'); s.value='file'; s.dispatchEvent(new Event('change')); true`);
+  const doc = await cdp.call('DOM.getDocument', { depth: 1 });
+  const { nodeId } = await cdp.call('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#file' });
+  await cdp.call('DOM.setFileInputFiles', { nodeId, files: [f] });
+  await ev(`document.getElementById('load').click(); true`);
+  await waitFor(`!document.getElementById('report').hidden`, 'late report');
+  assert.deepEqual(await ev(`[...document.querySelectorAll('#tbl-responses tbody tr')].map(r=>r.dataset.late)`), ['true', 'false', 'true', 'false']);
+  assert.equal(await ev(`document.querySelectorAll('#tbl-responses tbody td.late-cell')[0].textContent`), '마감후');
+  assert.equal(await ev(`document.getElementById('sum-late').textContent`), '2');
+  assert.equal(await ev(`document.getElementById('sum-n').textContent`), '3'); // flag only, nothing excluded
+  assert.deepEqual(errors.filter(Boolean).length, 0);
+});
+
 test('no secret string appears in any served static file', () => {
   const dirs = ['reports', 'lib', 'tools', 'collector', 'engine', 'schema'];
   const files = [];

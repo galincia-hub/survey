@@ -67,7 +67,7 @@ try{
     cli('tools/report.mjs',[id,'--source','jsonl',file,'--out',path.join(temp,'reports')]);
     const wb=new ExcelJS.Workbook();await wb.xlsx.readFile(path.join(temp,'reports',id+'-report.xlsx'));
     assert.deepEqual(wb.worksheets.map(s=>s.name),['raw','responses','summary','questions','text_linked','report_text']);
-    assert.equal(wb.getWorksheet('raw').getCell('H2').value,envelope.raw);
+    assert.equal(wb.getWorksheet('raw').getCell('I2').value,envelope.raw);
     const rows=wb.getWorksheet('questions').getSheetValues().slice(2).map(r=>r.slice(1));assert.equal(rows.find(r=>r[0]==='S1')[7],1);assert.equal(rows.find(r=>r[0]==='S1')[6],0);
     const summary=Object.fromEntries(wb.getWorksheet('summary').getSheetValues().slice(2).map(r=>r.slice(1)));assert.equal(summary.overall,22/3);
     const linked=wb.getWorksheet('text_linked').getCell('F3').value;assert.match(linked,/평가안함/);
