@@ -77,8 +77,31 @@ export async function buildSurvey(id,{root=projectRoot,target='github-pages',bas
     notes:content.collector.adapter==='local-mock'?['Local mock adapter: preview only; choose a production collector before approval.']:[]};
   return {content,manifest,plan,directory};
 }
+// Stages only <repo>/<prefix>/surveys/<id>; never touches other paths. Local `git add` of that single path, no commit/push.
+export async function stageGithubPages({repo,prefix='',id,published,allowUpdate=false}){
+  if(path.isAbsolute(prefix)||prefix.split(/[\\/]/).includes('..'))throw new Error('Invalid repository prefix');
+  const destination=path.join(path.resolve(repo),prefix,'surveys',id);
+  await mkdir(path.dirname(destination),{recursive:true});
+  if(await exists(destination)){
+    if(!allowUpdate)throw new Error('Destination exists; --allow-update required');
+    await rm(destination,{recursive:true});
+  }
+  await cp(path.join(published,'surveys',id),destination,{recursive:true});
+  const r=spawnSync('git',['-C',path.resolve(repo),'add','--',path.relative(path.resolve(repo),destination)],{stdio:'inherit'});
+  if(r.status!==0)throw new Error('Local staging failed');
+  return destination;
+}
+// Cloudflare Pages uploads the whole project, so the upload is the union of every published bundle, each verified against its manifest first.
+export async function stageCloudflareUpload(publishedRoot,upload){
+  let headers='';
+  for(const entry of await readdir(publishedRoot,{withFileTypes:true}))if(entry.isDirectory()){
+    const folder=path.join(publishedRoot,entry.name);await verifyBundle(folder);
+    await cp(path.join(folder,'surveys',entry.name),path.join(upload,'surveys',entry.name),{recursive:true});headers+=await readFile(path.join(folder,'_headers'),'utf8');
+  }
+  await writeFile(path.join(upload,'_headers'),headers);
+}
 // Real publication path is explicit opt-in. Tests and agent work invoke only build/dry-run.
-async function publish(result,options){
+export async function publish(result,options){
   if(!options.confirm)throw new Error('Publication requires explicit --confirm');
   const {content,manifest,directory}=result;
   if(content.collector.adapter==='local-mock')throw new Error('Refusing to publish local-mock content');
@@ -91,27 +114,11 @@ async function publish(result,options){
   if(await exists(published))await rm(published,{recursive:true});
   await mkdir(published,{recursive:true});
   for(const file of [...Object.keys(manifest.files),'manifest.json']){await mkdir(path.dirname(path.join(published,file)),{recursive:true});await cp(path.join(directory,file),path.join(published,file));}
-  if(options.target==='github-pages'){
-    const prefix=options.prefix||'';
-    if(path.isAbsolute(prefix)||prefix.split(/[\\/]/).includes('..'))throw new Error('Invalid repository prefix');
-    const destination=path.join(path.resolve(options.repo),prefix,'surveys',content.surveyId);
-    await mkdir(path.dirname(destination),{recursive:true});
-    if(await exists(destination)){
-      if(!options.allowUpdate)throw new Error('Destination exists; --allow-update required');
-      await rm(destination,{recursive:true});
-    }
-    await cp(path.join(published,'surveys',content.surveyId),destination,{recursive:true});
-    const r=spawnSync('git',['-C',path.resolve(options.repo),'add','--',path.relative(path.resolve(options.repo),destination)],{stdio:'inherit'});
-    if(r.status!==0)throw new Error('Local staging failed');
-  }else{
+  if(options.target==='github-pages')await stageGithubPages({repo:options.repo,prefix:options.prefix,id:content.surveyId,published,allowUpdate:options.allowUpdate});
+  else{
     const upload=await mkdtemp(path.join(root,'dist','.upload-'));
     try{
-      let headers='';
-      for(const entry of await readdir(publishedRoot,{withFileTypes:true}))if(entry.isDirectory()){
-        const folder=path.join(publishedRoot,entry.name);await verifyBundle(folder);
-        await cp(path.join(folder,'surveys',entry.name),path.join(upload,'surveys',entry.name),{recursive:true});headers+=await readFile(path.join(folder,'_headers'),'utf8');
-      }
-      await writeFile(path.join(upload,'_headers'),headers);
+      await stageCloudflareUpload(publishedRoot,upload);
       const r=spawnSync(path.join(projectRoot,'node_modules/.bin/wrangler'),['pages','deploy',upload,'--project-name',options.project],{stdio:'inherit'});
       if(r.status!==0)throw new Error('Pages upload failed');
     }finally{await rm(upload,{recursive:true,force:true});}

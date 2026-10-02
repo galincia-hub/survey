@@ -10,7 +10,7 @@
     "validate": "node tools/validate.mjs",
     "test:live-baseline": "node tests/preview-check.mjs --live-baseline",
     "test:lib": "node --test tests/unit/*.test.mjs tests/collector/*.test.mjs tests/reports/*.test.mjs tests/deploy/*.test.mjs",
-    "test:flow": "node tests/flow-check.mjs"
+    "test:flow": "node tests/flow-check.mjs && node tests/intake-e2e.mjs"
   },
   "engines": {
     "node": ">=20"
