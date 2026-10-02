@@ -6,11 +6,19 @@
   "scripts": {
     "preview": "node tools/preview.mjs",
     "mock": "node tools/mock-submit.mjs",
-    "test": "node tests/validate-check.mjs && node tests/preview-check.mjs",
+    "test": "node tests/validate-check.mjs && node tests/preview-check.mjs && npm run test:lib",
     "validate": "node tools/validate.mjs",
-    "test:live-baseline": "node tests/preview-check.mjs --live-baseline"
+    "test:live-baseline": "node tests/preview-check.mjs --live-baseline",
+    "test:lib": "node --test tests/unit/*.test.mjs tests/collector/*.test.mjs tests/reports/*.test.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "exceljs": "^4.4.0",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0",
+    "qrcode": "^1.5.4",
+    "wrangler": "^4.80.0"
   }
 }

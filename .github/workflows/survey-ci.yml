@@ -1,0 +1,55 @@
+# Survey Factory CI template. Validation + offline tests + deploy DRY-RUN only.
+# There is intentionally NO deploy job and NO secrets: publishing is an Owner-approved manual step (docs/DEPLOY_APPROVAL.md).
+name: survey-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: survey-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Validate every surveys/*/survey.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(surveys/*/survey.json)
+          [ ${#files[@]} -gt 0 ] || { echo "no surveys found"; exit 1; }
+          for f in "${files[@]}"; do
+            echo "::group::validate $f"
+            node tools/validate.mjs "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Offline tests (unit, collector contract, reports page)
+        run: npm test
+
+      - name: Deploy dry-run (prints plan only; never publishes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in surveys/*/survey.json; do
+            id=$(basename "$(dirname "$f")")
+            node tools/deploy.mjs "$id" --target github-pages --dry-run
+          done
