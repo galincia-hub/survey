@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "surveyId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowIdentity": {
+          "type": "boolean"
+        },
+        "identityQuestions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "allowIdentity"
+      ]
+    },
+    "theme": {
+      "enum": [
+        "default",
+        "sage",
+        "soft-blue",
+        "warm-beige",
+        "lavender"
+      ]
+    },
+    "intro": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brand": {
+          "type": "string"
+        },
+        "eyebrow": {
+          "type": "string"
+        },
+        "paragraphs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "highlightText": {
+          "type": "string"
+        },
+        "emphasisParagraph": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "brand",
+        "eyebrow",
+        "paragraphs"
+      ]
+    },
+    "respondent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "help": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "label",
+        "help",
+        "options"
+      ]
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "baseline": {
+          "type": "number"
+        },
+        "baselineLabel": {
+          "type": "string"
+        },
+        "baselineName": {
+          "type": "string"
+        },
+        "lowLabel": {
+          "type": "string"
+        },
+        "sameLabel": {
+          "type": "string"
+        },
+        "highLabel": {
+          "type": "string"
+        },
+        "allowNotEvaluated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "min",
+        "max",
+        "baseline",
+        "baselineLabel",
+        "baselineName",
+        "lowLabel",
+        "sameLabel",
+        "highLabel",
+        "allowNotEvaluated"
+      ]
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "en": {
+            "type": "string"
+          },
+          "theme": {
+            "enum": [
+              "default",
+              "sage",
+              "soft-blue",
+              "warm-beige",
+              "lavender"
+            ]
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+                },
+                "type": {
+                  "enum": [
+                    "score",
+                    "text",
+                    "singleChoice",
+                    "multiChoice"
+                  ]
+                },
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "help": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                },
+                "baseline": {
+                  "type": "number"
+                },
+                "rows": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "maxLength": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "linkedScores": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+                  },
+                  "minItems": 0
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "identity": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "prompt",
+                "required"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "subtitle",
+          "theme",
+          "questions"
+        ]
+      },
+      "minItems": 1
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "eyebrow": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lead": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "eyebrow",
+        "title",
+        "lead",
+        "done"
+      ]
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deadlineText": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deadlineText",
+        "sender"
+      ]
+    },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "enum": [
+            "local-mock"
+          ]
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^http://127\\.0\\.0\\.1:[0-9]{1,5}/submit$"
+        }
+      },
+      "required": [
+        "adapter",
+        "endpoint"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "enum": [
+            "legacy",
+            "standard"
+          ]
+        },
+        "surveyType": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "format"
+      ]
+    }
+  },
+  "required": [
+    "surveyId",
+    "version",
+    "title",
+    "eventName",
+    "eventDate",
+    "deadline",
+    "privacy",
+    "theme",
+    "intro",
+    "respondent",
+    "scale",
+    "sections",
+    "page",
+    "distribution",
+    "collector",
+    "payload"
+  ]
+}
