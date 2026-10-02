@@ -1,3 +1,7 @@
 node_modules/
 *.xlsx
 *.jsonl
+.wrangler/
+.dev.vars
+*.sqlite*
+reports/out/

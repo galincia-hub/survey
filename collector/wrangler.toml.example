@@ -1,0 +1,16 @@
+# Copy to wrangler.toml and fill in. No account ids or secrets belong in this file.
+name = "survey-factory-collector"
+main = "worker.js"
+compatibility_date = "2026-04-01"
+
+[vars]
+# Comma-separated exact origins allowed by CORS (scheme://host[:port]).
+ALLOWED_ORIGINS = "https://example.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "survey-factory"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# Secrets (never in this file): wrangler secret put REPORT_SECRET ; wrangler secret put ADMIN_SECRET
+# Local dev: put them in collector/.dev.vars (gitignored); see .dev.vars.example
