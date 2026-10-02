@@ -119,3 +119,25 @@ Legend: **MUST** = resolve before the first public deploy (or before the named o
 | 18 | AbortController fallback | ✅ test |
 | 19 | Runtime content-only test | ✅ |
 | 20 | Diff mask | ✅ `_preview/diff-*.png` |
+
+## Re-check @ d8a3ddd
+
+Method: I read `git show d8a3ddd` and ran `npm test` once. Result: **all PASS** (node:test 60/60, 54 PASS lines across the validate, browser and flow suites; visual diff 0 % on all four captures). I edited no code.
+
+| # | Item | Status | Evidence |
+|---|---|---|---|
+| M1 | wrangler telemetry/config in worker test | **Resolved** | `tests/collector/worker.test.mjs:42` now sets `WRANGLER_SEND_METRICS:'false'`, a temp `XDG_CONFIG_HOME` and `WRANGLER_LOG_PATH` (same as flow-check) |
+| M2 | `*.pages.dev` blocked | **Resolved** | `engine/storage.js` `isPreviewHost`: production `<project>.pages.dev` is allowed; `<x>.<project>.pages.dev`, `*.vercel.app` and http pages stay blocked. New unit test covers allowed and blocked hosts and counts sends |
+| M3 | Adora path / R04 | **Owner decision, still open** (docs now consistent: COLLECTOR_DECISION and OPERATION match DEPLOY_APPROVAL §4) | — |
+| S4 | Reports page cannot reach an HTTPS Worker | **Resolved** | `tools/preview.mjs` takes an optional validated `COLLECTOR_ORIGIN` (bare https or loopback origin, otherwise refuses to start); the `ALLOWED_ORIGINS` step is documented in DEPLOYMENT/OPERATION; test `preview CSP: collector origin only via COLLECTOR_ORIGIN…` |
+| S5 | No Worker-to-xlsx path | **Resolved** | `tools/report.mjs --source worker <endpoint>`, secret from env only; test covers xlsx re-read, raw byte-equal, 401, missing secret, non-https refusal, and checks the secret never appears in output |
+| S6 | Submit accepts any JSON object | **Resolved** | `collector/core.mjs:129` requires `answers` to be an object (400 otherwise); `raw` is untouched; the contract test checks that rejected bodies are not stored (mock + real wrangler) |
+| S7 | google-form `redirect:'error'` | **Resolved in code; behaviour still 확인 필요** | now `redirect:'follow'`; whether the real Form redirects can't be verified offline. Matters only for Adora option B |
+| S8 | Stale doc status lines | **Resolved** | INTAKE, COLLECTOR_DECISION, DEPLOYMENT and OPERATION are marked Final (open Owner decisions noted) |
+| N11 | Unchecked import rewrite in deploy | **Resolved** | `tools/deploy.mjs` throws if an import specifier or an HTML rewrite target is missing |
+
+Side effect, acceptable: the S6 shape gate runs after the 410 check, so closed surveys still answer 410 first. The engine's legacy and standard payloads both include `answers`.
+
+`DEPLOY_APPROVAL.md` was updated to `d8a3ddd`. I removed the pages.dev warning, step 6's prerequisite and recommendation 4's pre-work.
+
+### Updated verdict: **ready** for the code base. Public deploy is still gated on the Owner's one-time approval (DEPLOY_APPROVAL §5), which includes the Adora/R04 decision (M3).

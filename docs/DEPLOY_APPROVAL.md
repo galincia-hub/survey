@@ -1,6 +1,6 @@
 # DEPLOY_APPROVAL — 공개 배포 승인 요청
 
-기준: `75d611b` · Opus 5.5 최종 검토 반영 (2026-10-02) · 근거: `docs/REVIEW_OPUS_FINAL.md`
+기준: `d8a3ddd` · Opus 5.5 최종 검토 + 재확인 반영 (2026-10-02) · 근거: `docs/REVIEW_OPUS_FINAL.md`
 
 공개 URL 배포, 새 외부 계정 연결, 공개 범위 확대는 Owner 승인 사항이다. 승인 전에는 `tools/deploy.mjs`를 `--dry-run`으로만 실행한다. 실제 게시는 `--confirm`이 있어야 하며, 지금까지 한 번도 실행하지 않았다.
 "확인 필요" 표시는 오프라인 환경에서 검증하지 못한 사실이다. 배포 전에 공식 문서로 확인한다.
@@ -12,13 +12,13 @@
 | 변형 | 1a 기존 `galincia-hub/MD` 하위 경로 · 1b 새 전용 저장소 | 단일 계정에서 정적 페이지 + 수집 + DB |
 | 비용 | 0원 (공개 저장소). 비공개 저장소의 Pages는 유료 플랜 필요 (확인 필요) | 0원 (무료 플랜 한도 내). 한도 수치와 초과 시 동작(차단/과금)은 확인 필요 (`COLLECTOR_DECISION.md`) |
 | 필요한 계정 | 기존 `galincia-hub` GitHub | Cloudflare 계정 (무료, 신규) |
-| 정적 URL 예시 | 1a `https://galincia-hub.github.io/MD/surveys/<id>/` · 1b `https://galincia-hub.github.io/survey/surveys/<id>/` (저장소 이름 `survey`일 때) | `https://<project>.pages.dev/surveys/<id>/` (단, 아래 ⚠) 또는 사용자 도메인 |
+| 정적 URL 예시 | 1a `https://galincia-hub.github.io/MD/surveys/<id>/` · 1b `https://galincia-hub.github.io/survey/surveys/<id>/` (저장소 이름 `survey`일 때) | `https://<project>.pages.dev/surveys/<id>/` 또는 사용자 도메인 |
 | collector 적합성 | Pages 자체는 저장 불가. 수집은 ① Google Form(공용 1개) 또는 ② Cloudflare Worker+D1 (계정 필요) | Worker+D1을 같은 계정에서 운영. 가장 자연스러움 |
 | 자동 마감 | 화면: 마감 후 Closed 화면 (공통). 서버: Worker면 410으로 거부, Google Form이면 수동 "응답 받지 않음" | 화면 + Worker 410 (레지스트리 deadline/status) |
 | 다른 설문 격리 | 해당 `surveys/<id>/` 경로만 `git add` (커밋·푸시는 사람이 검토 후) | 사이트 전체를 업로드하므로, 업로드 전 모든 번들의 manifest를 재검증 (도구에 포함) |
 | 유지보수 | 설문마다 저장소에 1회 푸시 | 비밀 회전, `wrangler d1 export` 백업, 한도 확인 |
 
-⚠ **Option 2를 `*.pages.dev` 주소로 쓰려면 먼저 코드 수정이 필요하다.** 현재 엔진은 `*.pages.dev`를 미리보기 호스트로 보고 외부 제출을 막는다 (`engine/storage.js:13`, REVIEW M2). 엔진을 고치거나 사용자 도메인을 붙이기 전에는 응답자가 제출할 수 없다. Option 1은 영향이 없다.
+참고: 운영 주소 `<project>.pages.dev`에서는 Worker로 제출할 수 있다. 미리보기 배포(`<hash/branch>.<project>.pages.dev`)와 `*.vercel.app`에서는 외부 제출이 계속 차단된다 (`engine/storage.js` `isPreviewHost`, REVIEW M2 해결 @ `d8a3ddd`).
 
 URL 규칙(단일 함수 `lib/url.mjs`): `{baseUrl}/surveys/{surveyId}/` (선택 `?ref=CODE`). Worker 주소 예: `https://survey-factory-collector.<계정 서브도메인>.workers.dev`
 
@@ -41,7 +41,7 @@ URL 규칙(단일 함수 `lib/url.mjs`): `{baseUrl}/surveys/{surveyId}/` (선택
 3. `wrangler secret put REPORT_SECRET` · `wrangler secret put ADMIN_SECRET`
 4. `ALLOWED_ORIGINS = "https://galincia-hub.github.io"` → `wrangler deploy`
 5. 설문마다 `--confirm` 시 도구가 `PUT /v1/admin/surveys/<id>`로 deadline을 등록 (`ADMIN_SECRET` 환경변수)
-6. (Option 2 전체를 쓸 때만) Pages 프로젝트 생성 → `--target cloudflare --project <name>`. 이때는 ⚠ 수정 또는 사용자 도메인이 먼저 필요하다.
+6. (Option 2 전체를 쓸 때만) Pages 프로젝트 생성 → `--target cloudflare --project <name>`. Worker `ALLOWED_ORIGINS`에 `https://<project>.pages.dev`를 추가한다.
 
 ## 4. Adora 처리 (10/4 기한)
 
@@ -64,4 +64,4 @@ URL 규칙(단일 함수 `lib/url.mjs`): `{baseUrl}/surveys/{surveyId}/` (선택
 1. **호스팅은 Option 1b**(새 전용 GitHub Pages 저장소)로 한다. 추가 비용과 계정이 없고, 기존 `MD` 저장소와 격리되며, 현재 코드 그대로 동작한다.
 2. **수집은 Cloudflare Worker + D1**로 한다. 이것이 Option 2에서 가져오는 부분이다. 실패가 보이고, 서버측 자동 마감이 되며, 설문을 추가해도 백엔드를 수정할 필요가 없다. Cloudflare를 승인하지 않으면 공용 Google Form 1개와 수동 마감으로 대체한다.
 3. **Adora는 A(현행 유지).**
-4. 첫 공개 배포 전 선행 작업: REVIEW M1(테스트 env 오타, 1줄)을 고친다. Option 2를 `*.pages.dev`로 쓸 경우에만 M2도 고친다. 운영 편의를 위해 S4·S5(리포트 페이지/CLI에서 Worker 읽기)를 고친다.
+4. 코드 선행 작업은 남아 있지 않다 (REVIEW M1·M2·S4–S8·N11 해결 @ `d8a3ddd`). 결과 열람은 `REPORT_SECRET=… node tools/report.mjs <id> --source worker https://<worker-host>`(xlsx)로 한다. 웹 페이지를 쓰려면 `COLLECTOR_ORIGIN`을 지정한다 (`DEPLOYMENT.md`). Google Form 리다이렉트 동작은 여전히 확인 필요하며, Adora B안을 고를 때만 해당한다.
